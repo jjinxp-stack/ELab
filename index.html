@@ -556,13 +556,12 @@
   }
 
   .spectrum-workspace{
-    min-height:460px;
-    height:460px;
+    min-height:520px;
+    height:520px;
     background:#fff;
     border:0;
     border-radius:22px;
     overflow:auto;
-    transition:height .25s ease,min-height .25s ease;
   }
 
   .spectrum-label{
@@ -712,8 +711,8 @@
     }
 
     .spectrum-workspace{
-      height:520px;
-      min-height:520px;
+      height:580px;
+      min-height:580px;
     }
 
     .word-tray{
@@ -2678,33 +2677,12 @@ function storeDraggedWord(word,val,y,commit){
   }
 }
 
-function updateSurveyWorkspaceHeight(){
-  const workspace=document.getElementById('spectrumWorkspace');
-  if(!workspace || !currentParticipant || !currentCategory) return;
-
-  const placedCount=Object.keys(
-    currentParticipant.responses?.[currentCategory.id] || {}
-  ).length;
-
-  const isMobile=window.matchMedia('(max-width:820px)').matches;
-
-  let height=isMobile ? 520 : 460;
-
-  if(placedCount>=16) height += isMobile ? 100 : 90;
-  if(placedCount>=28) height += isMobile ? 110 : 100;
-  if(placedCount>=40) height += isMobile ? 120 : 110;
-  if(placedCount>=50) height += isMobile ? 130 : 120;
-
-  workspace.style.height=`${height}px`;
-  workspace.style.minHeight=`${height}px`;
-}
 
 function updateSurveyCount(){
   const n=Object.keys(currentParticipant.responses[currentCategory.id]||{}).length;
   const total=currentCategory.words.length;
   const percent=total ? Math.round((n/total)*100) : 0;
 
-  updateSurveyWorkspaceHeight();
 
   document.getElementById('surveyCount').textContent=`${n} / ${total}`;
   const progressFill=document.getElementById('surveyProgressFill');
@@ -4234,11 +4212,6 @@ function resetAll(){
   alert('온라인 데이터 삭제는 Supabase 관리자 화면에서만 진행합니다.');
 }
 
-window.addEventListener('resize',()=>{
-  if(document.getElementById('survey')?.classList.contains('active')){
-    updateSurveyWorkspaceHeight();
-  }
-});
 
 </script>
 </body>
