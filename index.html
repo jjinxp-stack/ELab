@@ -810,7 +810,7 @@
 
   /* 관리자 운영 화면 */
   #admin .metric-grid{
-    grid-template-columns:repeat(5,minmax(0,1fr));
+    grid-template-columns:repeat(4,minmax(0,1fr));
   }
   .admin-tools{
     display:grid;
@@ -1187,7 +1187,7 @@
   당신의 감정은 어떤가요?
 </p>
           <div class="row" style="margin-top:28px">
-            <button class="btn primary" onclick="startNewStudy()">새로 시작하기</button>
+            <button id="startStudyButton" class="btn primary" type="button" onclick="startNewStudy()">새로 시작하기</button>
             <button class="btn" onclick="showScreen('resume')">이어서 하기</button>
           </div>
           <div id="wordLoadNotice" class="notice hidden" style="margin-top:18px;max-width:620px"></div>
@@ -1446,7 +1446,7 @@
           <div class="card metric"><span class="helper">전체 참가자</span><strong id="mTotal">0</strong></div>
           <div class="card metric"><span class="helper">완료</span><strong id="mDone">0</strong></div>
           <div class="card metric"><span class="helper">진행 중</span><strong id="mActive">0</strong></div>
-          <div class="card metric"><span class="helper">사례 미지급</span><strong id="mUnpaid">0</strong></div>
+          
           <div class="card metric"><span class="helper">오늘 등록</span><strong id="mToday">0</strong></div>
         </div>
 
@@ -1470,13 +1470,13 @@
           <button class="btn admin-filter active" data-filter="all" onclick="setAdminFilter('all',this)">전체</button>
           <button class="btn admin-filter" data-filter="active" onclick="setAdminFilter('active',this)">진행 중</button>
           <button class="btn admin-filter" data-filter="done" onclick="setAdminFilter('done',this)">완료</button>
-          <button class="btn admin-filter" data-filter="unpaid" onclick="setAdminFilter('unpaid',this)">사례 미지급</button>
-          <button class="btn admin-filter" data-filter="paid" onclick="setAdminFilter('paid',this)">지급 완료</button>
+          
+          
         </div>
 
         <div class="admin-list-meta">
           <span id="adminResultCount">0명 표시</span>
-          <span>사례비 상태는 최종 제출 완료자에게만 적용됩니다.</span>
+          
         </div>
 
         <div class="card admin-table-wrap">
@@ -1489,7 +1489,7 @@
                 <th>진행률</th>
                 <th>상태</th>
                 <th>최근 활동</th>
-                <th>사례비</th>
+                
                 <th>상세</th>
               </tr>
             </thead>
@@ -1684,30 +1684,68 @@ async function loadEmotionWordsFromSupabase(){
 }
 
 async function ensureEmotionWordsReady(){
-  if(emotionWordsReady) return true;
+  if(emotionWordsReady && CLUSTERS.every(cluster=>cluster.words.length>0)){
+    return true;
+  }
 
-  const loaded=await loadEmotionWordsFromSupabase();
-  if(loaded) return true;
+  try{
+    const loaded=await Promise.race([
+      loadEmotionWordsFromSupabase(),
+      new Promise((_,reject)=>
+        setTimeout(()=>reject(new Error('WORD_LOAD_TIMEOUT')),12000)
+      )
+    ]);
+
+    if(loaded) return true;
+  }catch(error){
+    console.error('어휘 목록 확인 실패:',error);
+
+    if(error?.message==='WORD_LOAD_TIMEOUT'){
+      emotionWordsLoadError='어휘 목록을 불러오는 데 시간이 오래 걸리고 있습니다. 잠시 후 다시 시도해주세요.';
+    }
+  }
 
   alert(
     emotionWordsLoadError ||
-    '어휘 목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
+    '현재 연구 어휘 목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
   );
+
   return false;
 }
 
 async function startNewStudy(){
-  if(!await ensureEmotionWordsReady()) return;
-  showScreen('consent');
+  const button=document.getElementById('startStudyButton');
+
+  if(button){
+    button.disabled=true;
+    button.textContent='불러오는 중...';
+  }
+
+  try{
+    const ready=await ensureEmotionWordsReady();
+
+    if(!ready) return;
+
+    showScreen('consent');
+  }finally{
+    if(button){
+      button.disabled=false;
+      button.textContent='새로 시작하기';
+    }
+  }
 }
 
-window.addEventListener('DOMContentLoaded',()=>{
+function updateConnectionState(){
   const state=document.getElementById('connectionState');
-  if(state){
-    state.textContent=navigator.onLine ? '· ONLINE' : '· OFFLINE';
-    state.style.color=navigator.onLine ? '#8a8a8a' : '#ad5d68';
-  }
-});
+  if(!state) return;
+
+  state.textContent=navigator.onLine ? '· ONLINE' : '· OFFLINE';
+  state.style.color=navigator.onLine ? '#8a8a8a' : '#ad5d68';
+}
+
+window.addEventListener('DOMContentLoaded',updateConnectionState);
+window.addEventListener('online',updateConnectionState);
+window.addEventListener('offline',updateConnectionState);
 
 
 let currentParticipant = null;
@@ -1729,15 +1767,32 @@ window.addEventListener('offline',()=>{
   if(el){ el.textContent='· OFFLINE'; el.style.color='#ad5d68'; }
 });
 
-function showScreen(id){
-  document.querySelectorAll('.screen').forEach(screen=>{
-    screen.classList.remove('active');
-  });
-  const target=document.getElementById(id);
-  if(target){
-    target.classList.add('active');
-    window.scrollTo({top:0, behavior:'smooth'});
+let isHistoryNavigation=false;
+
+function showScreen(id,options={}){
+  const {replace=false,skipHistory=false}=options;
+
+  if(id==='opening'){
+    const notice=document.getElementById('wordLoadNotice');
+    if(notice) notice.classList.add('hidden');
   }
+
+  document.querySelectorAll('.screen').forEach(screen=>screen.classList.remove('active'));
+  const next=document.getElementById(id);
+  if(next) next.classList.add('active');
+
+  if(!skipHistory && !isHistoryNavigation){
+    const url=`#${id}`;
+    const state={screen:id};
+
+    if(replace){
+      history.replaceState(state,'',url);
+    }else{
+      history.pushState(state,'',url);
+    }
+  }
+
+  window.scrollTo({top:0,behavior:'instant'});
 }
 
 function setBusy(button, busy, busyText='처리 중...'){
@@ -2623,13 +2678,13 @@ function cancelWordCsvPreview(){
 
 async function renderAdmin(){
   const table=document.getElementById('participantTable');
-  table.innerHTML='<tr><td colspan="8">데이터를 불러오는 중입니다.</td></tr>';
+  table.innerHTML='<tr><td colspan="7">데이터를 불러오는 중입니다.</td></tr>';
 
   const { data,error }=await supabaseClient.rpc('admin_list_emotion_participants');
 
   if(error){
     console.error(error);
-    table.innerHTML='<tr><td colspan="8">관리자 데이터를 불러오지 못했습니다.</td></tr>';
+    table.innerHTML='<tr><td colspan="7">관리자 데이터를 불러오지 못했습니다.</td></tr>';
     return;
   }
 
@@ -2641,14 +2696,12 @@ async function renderAdmin(){
 function updateAdminMetrics(){
   const completed=adminParticipants.filter(p=>Boolean(p.final_submitted)).length;
   const active=adminParticipants.length-completed;
-  const unpaid=adminParticipants.filter(p=>Boolean(p.final_submitted) && !p.reward_paid).length;
   const todayKey=localDateKey(new Date());
   const today=adminParticipants.filter(p=>localDateKey(new Date(p.created_at))===todayKey).length;
 
   document.getElementById('mTotal').textContent=adminParticipants.length;
   document.getElementById('mDone').textContent=completed;
   document.getElementById('mActive').textContent=active;
-  document.getElementById('mUnpaid').textContent=unpaid;
   document.getElementById('mToday').textContent=today;
 }
 
@@ -2674,8 +2727,6 @@ function getFilteredAdminParticipants(){
     let matchesFilter=true;
     if(adminFilter==='active') matchesFilter=!p.final_submitted;
     if(adminFilter==='done') matchesFilter=Boolean(p.final_submitted);
-    if(adminFilter==='unpaid') matchesFilter=Boolean(p.final_submitted) && !p.reward_paid;
-    if(adminFilter==='paid') matchesFilter=Boolean(p.final_submitted) && Boolean(p.reward_paid);
 
     return matchesSearch && matchesFilter;
   });
@@ -2708,19 +2759,13 @@ function renderParticipantRows(participants){
   table.innerHTML='';
 
   if(!participants.length){
-    table.innerHTML='<tr><td colspan="8" class="admin-empty">조건에 맞는 참여자가 없습니다.</td></tr>';
+    table.innerHTML='<tr><td colspan="7" class="admin-empty">조건에 맞는 참여자가 없습니다.</td></tr>';
     return;
   }
 
   participants.forEach(p=>{
     const tr=document.createElement('tr');
     const shortNo=shortParticipantNumber(p.participant_number);
-    const rewardCell=p.final_submitted
-      ? `<button class="btn reward-btn ${p.reward_paid ? 'paid' : ''}"
-          onclick="toggleRewardPaid('${escapeJS(p.participant_code)}',${!p.reward_paid})">
-          ${p.reward_paid ? '지급 완료' : '미지급'}
-        </button>`
-      : '<span class="reward-na">대상 아님</span>';
 
     tr.innerHTML=`
       <td>${escapeHTML(shortNo)}</td>
@@ -2729,7 +2774,6 @@ function renderParticipantRows(participants){
       <td>${Number(p.completed_count || 0)} / 6</td>
       <td>${p.final_submitted ? '완료' : '진행 중'}</td>
       <td>${escapeHTML(formatDateTime(p.updated_at))}</td>
-      <td>${rewardCell}</td>
       <td>
         <button class="btn detail-btn"
           onclick="openParticipantDetail('${escapeJS(p.participant_code)}')">보기</button>
@@ -2737,43 +2781,6 @@ function renderParticipantRows(participants){
     `;
     table.appendChild(tr);
   });
-}
-
-async function toggleRewardPaid(participantCode,nextValue){
-  const participant=adminParticipants.find(p=>p.participant_code===participantCode);
-
-  if(!participant?.final_submitted){
-    showAdminToast('최종 제출 완료자만 사례비 상태를 변경할 수 있습니다.');
-    return;
-  }
-
-  const { data,error }=await supabaseClient.rpc('admin_update_emotion_participant',{
-    p_participant_code:participantCode,
-    p_reward_paid:nextValue,
-    p_admin_note:null
-  });
-
-  if(error || data!==true){
-    console.error(error);
-    showAdminToast('사례비 상태를 저장하지 못했습니다.');
-    return;
-  }
-
-  participant.reward_paid=nextValue;
-  participant.reward_paid_at=nextValue ? new Date().toISOString() : null;
-
-  if(selectedAdminParticipant?.participant_code===participantCode){
-    selectedAdminParticipant=participant;
-  }
-
-  updateAdminMetrics();
-  applyAdminFilters();
-
-  if(selectedAdminParticipant?.participant_code===participantCode){
-    renderParticipantDetail();
-  }
-
-  showAdminToast(nextValue ? '사례비를 지급 완료로 저장했습니다.' : '사례비를 미지급으로 변경했습니다.');
 }
 
 function openParticipantDetail(participantCode){
@@ -2832,18 +2839,6 @@ function renderParticipantDetail(){
   document.getElementById('participantModalTitle').textContent=
     `${p.name || '이름 없음'} · ${shortNo}`;
 
-  const rewardControl=p.final_submitted
-    ? `<button class="btn reward-btn ${p.reward_paid ? 'paid' : ''}"
-        onclick="toggleRewardPaid('${escapeJS(p.participant_code)}',${!p.reward_paid})">
-        ${p.reward_paid ? '지급 완료' : '미지급'}
-      </button>
-      <p class="helper" style="margin-top:8px">
-        ${p.reward_paid
-          ? `지급 처리 시각: ${escapeHTML(formatDateTime(p.reward_paid_at))}`
-          : '아직 지급 처리되지 않았습니다.'}
-      </p>`
-    : `<span class="reward-na">최종 제출 전 · 사례비 처리 대상 아님</span>`;
-
   document.getElementById('participantDetail').innerHTML=`
     <div class="admin-detail-grid">
       <div class="admin-detail-item"><span>참가번호</span><strong>${escapeHTML(shortNo)}</strong></div>
@@ -2869,14 +2864,9 @@ function renderParticipantDetail(){
     </div>
 
     <div class="admin-section">
-      <h3>사례비</h3>
-      ${rewardControl}
-    </div>
-
-    <div class="admin-section">
       <label>관리자 메모
         <textarea id="adminNoteInput" class="admin-note"
-          placeholder="연락 여부, 특이사항, 사례비 관련 메모 등을 기록하세요.">${escapeHTML(p.admin_note || '')}</textarea>
+          placeholder="연락 여부, 특이사항 등을 기록하세요.">${escapeHTML(p.admin_note || '')}</textarea>
       </label>
 
       <div class="admin-detail-actions">
@@ -3088,6 +3078,71 @@ async function exportClusterResponseCSV(clusterKey){
 
   showAdminToast(`${config.label} 응답 CSV를 다운로드했습니다.`);
 }
+
+
+function currentScreenId(){
+  return document.querySelector('.screen.active')?.id || 'opening';
+}
+
+function screenFromHash(){
+  const id=location.hash.replace(/^#/,'').trim();
+  return document.getElementById(id)?.classList.contains('screen') ? id : 'opening';
+}
+
+function canOpenScreenFromHistory(id){
+  const participantScreens=[
+    'registered',
+    'participantDashboard',
+    'tutorial',
+    'survey',
+    'completion',
+    'final'
+  ];
+
+  if(participantScreens.includes(id) && !currentParticipant){
+    return 'opening';
+  }
+
+  if(id==='admin' && !adminParticipants){
+    return 'adminLogin';
+  }
+
+  return id;
+}
+
+window.addEventListener('popstate',()=>{
+  const requested=screenFromHash();
+  const target=canOpenScreenFromHistory(requested);
+
+  isHistoryNavigation=true;
+
+  // 평가 화면에서 뒤로가기 할 때 현재 위치는 기존 자동저장 흐름을 유지합니다.
+  showScreen(target,{skipHistory:true});
+
+  if(target==='participantDashboard' && currentParticipant){
+    renderDashboard();
+  }
+
+  if(target==='admin' && Array.isArray(adminParticipants)){
+    applyAdminFilters();
+  }
+
+  isHistoryNavigation=false;
+});
+
+window.addEventListener('DOMContentLoaded',()=>{
+  const initial=screenFromHash();
+
+  if(!location.hash){
+    history.replaceState({screen:'opening'},'','#opening');
+    return;
+  }
+
+  const safe=canOpenScreenFromHistory(initial);
+  isHistoryNavigation=true;
+  showScreen(safe,{skipHistory:true});
+  isHistoryNavigation=false;
+});
 
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape' && document.getElementById('participantModal')?.classList.contains('open')){
