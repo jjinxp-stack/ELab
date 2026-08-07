@@ -2257,14 +2257,18 @@ function downloadCSV(filename,headers,rows){
   URL.revokeObjectURL(link.href);
 }
 
-function exportParticipantContactsCSV(){
-  const headers=['name','phone','email'];
+async function exportParticipantContactsCSV(){
+  const { data,error }=
+    await supabaseClient.rpc('admin_export_participant_contacts');
 
-  const rows=adminParticipants.map(participant=>({
-    name:participant.name || '',
-    phone:participant.phone || '',
-    email:participant.email || ''
-  }));
+  if(error){
+    console.error(error);
+    showAdminToast('참여자 연락처 데이터를 불러오지 못했습니다.');
+    return;
+  }
+
+  const rows=Array.isArray(data) ? data : [];
+  const headers=['name','phone','email'];
 
   downloadCSV(
     `emotion_map_participant_contacts_${localDateKey(new Date())}.csv`,
@@ -2276,68 +2280,45 @@ function exportParticipantContactsCSV(){
 }
 
 async function exportClusterResponseCSV(clusterKey){
-  const clusterNames={
-    body:'신체감각',
-    context:'맥락기반',
-    direct:'직접표현'
+  const exportConfig={
+    body:{
+      label:'신체감각',
+      rpc:'admin_export_body_responses',
+      filename:'body'
+    },
+    context:{
+      label:'맥락기반',
+      rpc:'admin_export_context_responses',
+      filename:'context'
+    },
+    direct:{
+      label:'직접표현',
+      rpc:'admin_export_direct_responses',
+      filename:'direct'
+    }
   };
 
-  const fileNames={
-    body:'body',
-    context:'context',
-    direct:'direct'
-  };
+  const config=exportConfig[clusterKey];
 
-  if(!clusterNames[clusterKey]){
+  if(!config){
     showAdminToast('알 수 없는 응답 구분입니다.');
     return;
   }
 
-  const { data,error }=await supabaseClient.rpc('admin_export_emotion_responses');
+  const { data,error }=await supabaseClient.rpc(config.rpc);
 
   if(error){
     console.error(error);
-    showAdminToast('응답 데이터를 불러오지 못했습니다.');
+    showAdminToast(`${config.label} 응답 데이터를 불러오지 못했습니다.`);
     return;
   }
 
-  const sourceRows=Array.isArray(data) ? data : [];
-  const pairedRows=new Map();
-
-  sourceRows.forEach(row=>{
-    const category=String(row.category || '');
-    const [cluster,dimension]=category.split('_');
-
-    if(cluster!==clusterKey) return;
-    if(dimension!=='valence' && dimension!=='arousal') return;
-    if(!row.word) return;
-
-    const key=[
-      row.participant_number || '',
-      row.word
-    ].join('|||');
-
-    if(!pairedRows.has(key)){
-      pairedRows.set(key,{
-        participant_number:shortParticipantNumber(row.participant_number),
-        word:row.word,
-        valence:'',
-        arousal:''
-      });
-    }
-
-    pairedRows.get(key)[dimension]=row.score ?? '';
-  });
-
-  const rows=Array.from(pairedRows.values()).sort((a,b)=>{
-    const participantDifference=
-      participantNumberValue(a.participant_number)-
-      participantNumberValue(b.participant_number);
-
-    if(participantDifference!==0) return participantDifference;
-
-    return String(a.word).localeCompare(String(b.word),'ko');
-  });
+  const rows=(Array.isArray(data) ? data : []).map(row=>({
+    participant_number:shortParticipantNumber(row.participant_number),
+    word:row.word,
+    valence:row.valence ?? '',
+    arousal:row.arousal ?? ''
+  }));
 
   const headers=[
     'participant_number',
@@ -2347,12 +2328,12 @@ async function exportClusterResponseCSV(clusterKey){
   ];
 
   downloadCSV(
-    `emotion_map_${fileNames[clusterKey]}_responses_${localDateKey(new Date())}.csv`,
+    `emotion_map_${config.filename}_responses_${localDateKey(new Date())}.csv`,
     headers,
     rows
   );
 
-  showAdminToast(`${clusterNames[clusterKey]} 응답 CSV를 다운로드했습니다.`);
+  showAdminToast(`${config.label} 응답 CSV를 다운로드했습니다.`);
 }
 
 document.addEventListener('keydown',event=>{
