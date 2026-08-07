@@ -164,9 +164,21 @@
       border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
     }
     .map-dot {
-      position: absolute; transform: translate(-50%,-50%);
-      border: 1px solid #222; border-radius: 999px; background: white;
-      padding: 6px 9px; font-size: 12px; font-weight: 800;
+      position:absolute;
+      transform:translate(-50%,-50%);
+      border:0;
+      border-radius:0;
+      background:transparent;
+      padding:0;
+      font-size:12px;
+      font-weight:700;
+      line-height:1.15;
+      white-space:nowrap;
+      color:#242424;
+      text-shadow:
+        0 0 3px rgba(255,255,255,.95),
+        0 0 7px rgba(255,255,255,.9);
+      pointer-events:none;
     }
     .metric-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
     .metric strong { display: block; font-size: 34px; letter-spacing: -.04em; }
@@ -1472,6 +1484,49 @@
   }
 </style>
 
+
+<style id="admin-participant-map-style">
+  .admin-map-toolbar{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin:14px 0;
+  }
+  .admin-map-toolbar .btn{
+    min-width:auto;
+    padding:9px 14px;
+    font-size:13px;
+  }
+  .admin-map-toolbar .btn.active{
+    background:#242424;
+    color:#fff;
+    border-color:#242424;
+  }
+  .admin-participant-map{
+    position:relative;
+    width:100%;
+    aspect-ratio:1.25 / 1;
+    min-height:430px;
+    border-radius:18px;
+    border:1px solid #e7e7e7;
+    overflow:hidden;
+    background:
+      linear-gradient(to right,transparent 49.9%,#bdbdbd 49.9%,#bdbdbd 50.1%,transparent 50.1%),
+      linear-gradient(to bottom,transparent 49.9%,#bdbdbd 49.9%,#bdbdbd 50.1%,transparent 50.1%),
+      #fff;
+  }
+  .admin-map-state{
+    padding:16px 0 4px;
+    color:#888;
+    font-size:13px;
+  }
+  @media(max-width:700px){
+    .admin-participant-map{
+      min-height:360px;
+    }
+  }
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -2255,6 +2310,9 @@ let pendingWordImport = null;
 
 let developerPreviewActive = false;
 let developerPreviewBackup = null;
+
+let adminParticipantMapData = null;
+let adminParticipantMapCluster = 'body';
 
 
 window.addEventListener('online',()=>{
@@ -3438,6 +3496,8 @@ function openParticipantDetail(participantCode){
   selectedAdminParticipant=adminParticipants.find(p=>p.participant_code===participantCode) || null;
   if(!selectedAdminParticipant) return;
 
+  adminParticipantMapData=null;
+  adminParticipantMapCluster='body';
   renderParticipantDetail();
   document.getElementById('participantModal').classList.add('open');
   document.body.style.overflow='hidden';
@@ -3455,6 +3515,8 @@ function moveParticipantDetail(direction){
   if(nextIndex<0 || nextIndex>=visible.length) return;
 
   selectedAdminParticipant=visible[nextIndex];
+  adminParticipantMapData=null;
+  adminParticipantMapCluster='body';
   renderParticipantDetail();
   document.querySelector('.admin-modal-card')?.scrollTo({top:0,behavior:'smooth'});
 }
@@ -3515,6 +3577,29 @@ function renderParticipantDetail(){
     </div>
 
     <div class="admin-section">
+      <h3>최종 감정 맵</h3>
+      <p class="helper">
+        ${p.final_submitted
+          ? '참여자가 최종 제출한 응답을 감정 맵으로 확인합니다.'
+          : '최종 제출이 완료된 참여자만 감정 맵을 확인할 수 있습니다.'}
+      </p>
+      <div class="admin-detail-actions" style="justify-content:flex-start">
+        <button class="btn ${p.final_submitted ? 'primary' : ''}"
+          onclick="loadAdminParticipantMap()"
+          ${p.final_submitted ? '' : 'disabled'}>
+          최종 감정 맵 보기
+        </button>
+      </div>
+
+      <div id="adminParticipantMapPanel" class="hidden">
+        <div id="adminParticipantMapState" class="admin-map-state"></div>
+        <div id="adminParticipantMapTabs" class="admin-map-toolbar"></div>
+        <div id="adminParticipantMapTitle" style="font-weight:800;margin:8px 0 12px"></div>
+        <div id="adminParticipantMap" class="admin-participant-map"></div>
+      </div>
+    </div>
+
+    <div class="admin-section">
       <label>관리자 메모
         <textarea id="adminNoteInput" class="admin-note"
           placeholder="연락 여부, 특이사항 등을 기록하세요.">${escapeHTML(p.admin_note || '')}</textarea>
@@ -3527,6 +3612,122 @@ function renderParticipantDetail(){
   `;
 
   updateParticipantNavigation();
+}
+
+
+async function loadAdminParticipantMap(){
+  const p=selectedAdminParticipant;
+  if(!p || !p.final_submitted) return;
+
+  const panel=document.getElementById('adminParticipantMapPanel');
+  const state=document.getElementById('adminParticipantMapState');
+
+  if(panel) panel.classList.remove('hidden');
+  if(state) state.textContent='응답 데이터를 불러오는 중입니다...';
+
+  const calls=await Promise.all([
+    supabaseClient.rpc('admin_export_body_responses'),
+    supabaseClient.rpc('admin_export_context_responses'),
+    supabaseClient.rpc('admin_export_direct_responses')
+  ]);
+
+  const errorCall=calls.find(result=>result.error);
+  if(errorCall){
+    console.error('참여자 감정 맵 조회 실패:',errorCall.error);
+    if(state) state.textContent='감정 맵 데이터를 불러오지 못했습니다.';
+    return;
+  }
+
+  const clusterKeys=['body','context','direct'];
+  const mapData={body:{},context:{},direct:{}};
+
+  calls.forEach((result,index)=>{
+    const clusterKey=clusterKeys[index];
+    const rows=Array.isArray(result.data) ? result.data : [];
+
+    rows
+      .filter(row=>String(row.participant_number)===String(p.participant_number))
+      .forEach(row=>{
+        mapData[clusterKey][row.word]={
+          valence:Number(row.valence ?? 0),
+          arousal:Number(row.arousal ?? 0)
+        };
+      });
+  });
+
+  adminParticipantMapData=mapData;
+  adminParticipantMapCluster='body';
+
+  const total=Object.values(mapData).reduce(
+    (sum,cluster)=>sum+Object.keys(cluster).length,0
+  );
+
+  if(!total){
+    if(state) state.textContent='저장된 감정 맵 응답이 없습니다.';
+    return;
+  }
+
+  if(state) state.textContent=`${total}개 어휘 응답을 불러왔습니다.`;
+
+  renderAdminParticipantMapTabs();
+  renderAdminParticipantMap('body');
+}
+
+function renderAdminParticipantMapTabs(){
+  const tabs=document.getElementById('adminParticipantMapTabs');
+  if(!tabs || !adminParticipantMapData) return;
+
+  const labels={
+    body:'신체감각',
+    context:'맥락기반',
+    direct:'직접표현'
+  };
+
+  tabs.innerHTML='';
+
+  Object.entries(labels).forEach(([key,label])=>{
+    const button=document.createElement('button');
+    button.className=`btn ${adminParticipantMapCluster===key ? 'active' : ''}`;
+    button.textContent=label;
+    button.onclick=()=>{
+      adminParticipantMapCluster=key;
+      renderAdminParticipantMapTabs();
+      renderAdminParticipantMap(key);
+    };
+    tabs.appendChild(button);
+  });
+}
+
+function renderAdminParticipantMap(clusterKey){
+  if(!adminParticipantMapData) return;
+
+  const map=document.getElementById('adminParticipantMap');
+  const title=document.getElementById('adminParticipantMapTitle');
+  if(!map || !title) return;
+
+  const labels={
+    body:'신체감각 감정 맵',
+    context:'맥락기반 감정 맵',
+    direct:'직접표현 감정 맵'
+  };
+
+  title.textContent=labels[clusterKey] || '감정 맵';
+  map.innerHTML='';
+
+  const rows=adminParticipantMapData[clusterKey] || {};
+
+  Object.entries(rows).forEach(([word,score])=>{
+    const valence=Number(score.valence ?? 0);
+    const arousal=Number(score.arousal ?? 0);
+
+    const dot=document.createElement('div');
+    dot.className='map-dot';
+    dot.textContent=word;
+    dot.style.left=`${(valence+1)/2*100}%`;
+    dot.style.top=`${(1-(arousal+1)/2)*100}%`;
+    dot.title=`Valence ${valence.toFixed(2)} / Arousal ${arousal.toFixed(2)}`;
+    map.appendChild(dot);
+  });
 }
 
 async function saveAdminNote(){
@@ -3562,6 +3763,8 @@ function closeParticipantModal(event){
   document.getElementById('participantModal').classList.remove('open');
   document.body.style.overflow='';
   selectedAdminParticipant=null;
+  adminParticipantMapData=null;
+  adminParticipantMapCluster='body';
 }
 
 function showAdminToast(message){
