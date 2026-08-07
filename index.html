@@ -1626,12 +1626,6 @@ function setWordLoadState(ready,message=''){
   emotionWordsReady=ready;
   emotionWordsLoadError=message;
 
-  const state=document.getElementById('connectionState');
-  if(state){
-    state.textContent=ready ? '· ONLINE' : '· WORD LIST ERROR';
-    state.style.color=ready ? '#8a8a8a' : '#ad5d68';
-  }
-
   const notice=document.getElementById('wordLoadNotice');
   if(notice){
     notice.classList.toggle('hidden',ready || !message);
@@ -1653,7 +1647,7 @@ async function loadEmotionWordsFromSupabase(){
     console.error('어휘 목록 불러오기 실패:',error);
     setWordLoadState(
       false,
-      '어휘 목록을 불러오지 못했습니다. 잠시 후 새로고침해주세요.'
+      '현재 연구 어휘 목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.'
     );
     return false;
   }
@@ -1707,8 +1701,12 @@ async function startNewStudy(){
   showScreen('consent');
 }
 
-window.addEventListener('DOMContentLoaded',async()=>{
-  await loadEmotionWordsFromSupabase();
+window.addEventListener('DOMContentLoaded',()=>{
+  const state=document.getElementById('connectionState');
+  if(state){
+    state.textContent=navigator.onLine ? '· ONLINE' : '· OFFLINE';
+    state.style.color=navigator.onLine ? '#8a8a8a' : '#ad5d68';
+  }
 });
 
 
@@ -2135,6 +2133,10 @@ async function finalSubmit(){
   showScreen('final');
 }
 async function showAdmin(){
+  // 관리자 인증은 어휘 목록 로딩 상태와 독립적으로 동작합니다.
+  const notice=document.getElementById('wordLoadNotice');
+  if(notice) notice.classList.add('hidden');
+
   const { data: { session } } = await supabaseClient.auth.getSession();
 
   if(!session){
@@ -2157,6 +2159,7 @@ async function showAdmin(){
 }
 
 async function loginAdmin(){
+  // 어휘 목록 오류 여부와 관계없이 먼저 관리자 인증을 수행합니다.
   const button = document.getElementById('adminLoginButton');
   const email = document.getElementById('adminEmail').value.trim();
   const password = document.getElementById('adminPassword').value;
@@ -2170,19 +2173,54 @@ async function loginAdmin(){
   errorEl.textContent='';
   setBusy(button, true, '로그인 중...');
 
-  const { error: loginError } = await supabaseClient.auth.signInWithPassword({
-    email,
-    password
-  });
+  let loginResult;
+
+  try{
+    loginResult=await Promise.race([
+      supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      }),
+      new Promise((_,reject)=>
+        setTimeout(()=>reject(new Error('LOGIN_TIMEOUT')),12000)
+      )
+    ]);
+  }catch(error){
+    console.error('관리자 로그인 실패:',error);
+    setBusy(button,false);
+    errorEl.textContent=
+      error?.message==='LOGIN_TIMEOUT'
+        ? '로그인 요청 시간이 초과되었습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.'
+        : '로그인 중 오류가 발생했습니다.';
+    return;
+  }
+
+  const loginError=loginResult?.error;
 
   if(loginError){
+    console.error('Supabase 로그인 오류:',loginError);
     setBusy(button, false);
     errorEl.textContent='이메일 또는 비밀번호가 올바르지 않습니다.';
     return;
   }
 
-  const { data: isAdmin, error: adminError } =
-    await supabaseClient.rpc('is_emotion_admin');
+  let adminCheck;
+
+  try{
+    adminCheck=await Promise.race([
+      supabaseClient.rpc('is_emotion_admin'),
+      new Promise((_,reject)=>
+        setTimeout(()=>reject(new Error('ADMIN_CHECK_TIMEOUT')),12000)
+      )
+    ]);
+  }catch(error){
+    console.error('관리자 권한 확인 실패:',error);
+    setBusy(button,false);
+    errorEl.textContent='관리자 권한 확인에 실패했습니다. 잠시 후 다시 시도해주세요.';
+    return;
+  }
+
+  const { data:isAdmin, error:adminError }=adminCheck;
 
   setBusy(button, false);
 
