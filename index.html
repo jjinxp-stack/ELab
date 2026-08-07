@@ -2107,7 +2107,7 @@ function updateSurveyCount(){
   const n=Object.keys(currentParticipant.responses[currentCategory.id]||{}).length;
   const total=currentCategory.words.length;
   const percent=total ? Math.round((n/total)*100) : 0;
-  document.getElementById('surveyCount').textContent=`${n} / ${total}개 배치 완료`;
+  document.getElementById('surveyCount').textContent=`${n} / ${total}`;
   const progressFill=document.getElementById('surveyProgressFill');
   const progressPercent=document.getElementById('surveyProgressPercent');
   if(progressFill) progressFill.style.width=`${percent}%`;
