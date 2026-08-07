@@ -1017,6 +1017,149 @@
   }
 </style>
 
+
+<style id="admin-word-manager">
+  .admin-main-tabs{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin:0 0 28px;
+  }
+  .admin-main-tab{
+    min-width:auto;
+    padding:10px 16px;
+    border-color:#d8d8d8;
+  }
+  .admin-main-tab.active{
+    background:#242424;
+    color:#fff;
+    border-color:#242424;
+  }
+  .word-manager-head{
+    display:flex;
+    justify-content:space-between;
+    gap:18px;
+    align-items:flex-start;
+    margin-bottom:20px;
+  }
+  .word-manager-actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .word-manager-actions .btn{
+    min-width:auto;
+    padding:10px 16px;
+  }
+  .word-cluster-tabs{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin:18px 0;
+  }
+  .word-cluster-tab{
+    min-width:auto;
+    padding:10px 16px;
+    border-color:#d8d8d8;
+  }
+  .word-cluster-tab.active{
+    background:#242424;
+    border-color:#242424;
+    color:#fff;
+  }
+  .word-summary-grid{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:20px;
+  }
+  .word-summary{
+    background:#f5f5f5;
+    border-radius:16px;
+    padding:16px;
+  }
+  .word-summary span{
+    display:block;
+    color:#888;
+    font-size:12px;
+    margin-bottom:5px;
+  }
+  .word-summary strong{
+    font-size:26px;
+  }
+  .word-manager-table-wrap{
+    overflow:auto;
+  }
+  .word-manager-table-wrap table{
+    min-width:640px;
+  }
+  .word-manager-table-wrap td:nth-child(1){
+    width:90px;
+    color:#888;
+  }
+  .word-manager-table-wrap td:nth-child(3){
+    width:120px;
+  }
+  .word-status-active{
+    font-weight:700;
+  }
+  .word-status-inactive{
+    color:#aaa;
+  }
+  .word-import-box{
+    margin-top:22px;
+    padding:22px;
+    border-radius:18px;
+    background:#f5f5f5;
+  }
+  .word-import-box input[type="file"]{
+    background:#fff;
+  }
+  .word-preview{
+    margin-top:18px;
+  }
+  .word-preview-warning{
+    padding:13px 15px;
+    border-radius:12px;
+    background:#fff4d8;
+    color:#715c1f;
+    font-size:13px;
+    margin:12px 0;
+  }
+  .word-preview-error{
+    padding:13px 15px;
+    border-radius:12px;
+    background:#fdebec;
+    color:#8c3f48;
+    font-size:13px;
+    margin:12px 0;
+  }
+  .word-preview-ok{
+    padding:13px 15px;
+    border-radius:12px;
+    background:#edf7f1;
+    color:#35654d;
+    font-size:13px;
+    margin:12px 0;
+  }
+  .word-preview-list{
+    max-height:260px;
+    overflow:auto;
+    background:#fff;
+    border-radius:14px;
+    padding:10px 14px;
+  }
+  .word-preview-list table{
+    min-width:560px;
+  }
+  @media(max-width:820px){
+    .word-manager-head{flex-direction:column}
+    .word-manager-actions{justify-content:flex-start}
+    .word-summary-grid{grid-template-columns:1fr 1fr}
+  }
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -1275,71 +1418,138 @@
       <div class="dashboard-head">
         <div>
           <div class="eyebrow">ADMIN</div>
-          <h2>참여자 관리</h2>
-          <p>참여 현황을 관리하고, 연락처와 세 어휘군의 응답 데이터를 각각 내려받습니다.</p>
+          <h2 id="adminPageTitle">참여자 관리</h2>
+          <p id="adminPageDescription">참여 현황을 관리하고, 연락처와 세 어휘군의 응답 데이터를 각각 내려받습니다.</p>
         </div>
         <div class="row">
-          <button class="btn" onclick="exportParticipantContactsCSV()">참여자 연락처 CSV</button>
-          <button class="btn" onclick="exportClusterResponseCSV('body')">신체감각 CSV</button>
-          <button class="btn" onclick="exportClusterResponseCSV('context')">맥락기반 CSV</button>
-          <button class="btn" onclick="exportClusterResponseCSV('direct')">직접표현 CSV</button>
           <button class="btn" onclick="logoutAdmin()">로그아웃</button>
         </div>
       </div>
 
-      <div class="metric-grid">
-        <div class="card metric"><span class="helper">전체 참가자</span><strong id="mTotal">0</strong></div>
-        <div class="card metric"><span class="helper">완료</span><strong id="mDone">0</strong></div>
-        <div class="card metric"><span class="helper">진행 중</span><strong id="mActive">0</strong></div>
-        <div class="card metric"><span class="helper">사례 미지급</span><strong id="mUnpaid">0</strong></div>
-        <div class="card metric"><span class="helper">오늘 등록</span><strong id="mToday">0</strong></div>
+      <div class="admin-main-tabs">
+        <button id="adminParticipantsTab" class="btn admin-main-tab active"
+          onclick="showAdminPanel('participants')">참여자 관리</button>
+        <button id="adminWordsTab" class="btn admin-main-tab"
+          onclick="showAdminPanel('words')">어휘 관리</button>
       </div>
 
-      <div class="admin-tools">
-        <input id="adminSearch" class="admin-search"
-          placeholder="이름, 연락처, 이메일, 참가번호, 참여코드 검색"
-          oninput="applyAdminFilters()" />
+      <div id="adminParticipantsPanel">
+        <div class="row" style="justify-content:flex-end;margin-bottom:18px">
+          <button class="btn" onclick="exportParticipantContactsCSV()">참여자 연락처 CSV</button>
+          <button class="btn" onclick="exportClusterResponseCSV('body')">신체감각 CSV</button>
+          <button class="btn" onclick="exportClusterResponseCSV('context')">맥락기반 CSV</button>
+          <button class="btn" onclick="exportClusterResponseCSV('direct')">직접표현 CSV</button>
+        </div>
 
-        <div class="admin-tool-right">
-          <select id="adminSort" class="admin-sort" onchange="applyAdminFilters()">
-            <option value="newest">최근 등록순</option>
-            <option value="activity">최근 활동순</option>
-            <option value="numberAsc">참가번호순</option>
-            <option value="progressDesc">진행률 높은순</option>
-          </select>
-          <button class="btn" onclick="renderAdmin()">새로고침</button>
+        <div class="metric-grid">
+          <div class="card metric"><span class="helper">전체 참가자</span><strong id="mTotal">0</strong></div>
+          <div class="card metric"><span class="helper">완료</span><strong id="mDone">0</strong></div>
+          <div class="card metric"><span class="helper">진행 중</span><strong id="mActive">0</strong></div>
+          <div class="card metric"><span class="helper">사례 미지급</span><strong id="mUnpaid">0</strong></div>
+          <div class="card metric"><span class="helper">오늘 등록</span><strong id="mToday">0</strong></div>
+        </div>
+
+        <div class="admin-tools">
+          <input id="adminSearch" class="admin-search"
+            placeholder="이름, 연락처, 이메일, 참가번호, 참여코드 검색"
+            oninput="applyAdminFilters()" />
+
+          <div class="admin-tool-right">
+            <select id="adminSort" class="admin-sort" onchange="applyAdminFilters()">
+              <option value="newest">최근 등록순</option>
+              <option value="activity">최근 활동순</option>
+              <option value="numberAsc">참가번호순</option>
+              <option value="progressDesc">진행률 높은순</option>
+            </select>
+            <button class="btn" onclick="renderAdmin()">새로고침</button>
+          </div>
+        </div>
+
+        <div class="admin-filters" aria-label="참여자 상태 필터">
+          <button class="btn admin-filter active" data-filter="all" onclick="setAdminFilter('all',this)">전체</button>
+          <button class="btn admin-filter" data-filter="active" onclick="setAdminFilter('active',this)">진행 중</button>
+          <button class="btn admin-filter" data-filter="done" onclick="setAdminFilter('done',this)">완료</button>
+          <button class="btn admin-filter" data-filter="unpaid" onclick="setAdminFilter('unpaid',this)">사례 미지급</button>
+          <button class="btn admin-filter" data-filter="paid" onclick="setAdminFilter('paid',this)">지급 완료</button>
+        </div>
+
+        <div class="admin-list-meta">
+          <span id="adminResultCount">0명 표시</span>
+          <span>사례비 상태는 최종 제출 완료자에게만 적용됩니다.</span>
+        </div>
+
+        <div class="card admin-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>참가번호</th>
+                <th>이름</th>
+                <th>연락처</th>
+                <th>진행률</th>
+                <th>상태</th>
+                <th>최근 활동</th>
+                <th>사례비</th>
+                <th>상세</th>
+              </tr>
+            </thead>
+            <tbody id="participantTable"></tbody>
+          </table>
         </div>
       </div>
 
-      <div class="admin-filters" aria-label="참여자 상태 필터">
-        <button class="btn admin-filter active" data-filter="all" onclick="setAdminFilter('all',this)">전체</button>
-        <button class="btn admin-filter" data-filter="active" onclick="setAdminFilter('active',this)">진행 중</button>
-        <button class="btn admin-filter" data-filter="done" onclick="setAdminFilter('done',this)">완료</button>
-        <button class="btn admin-filter" data-filter="unpaid" onclick="setAdminFilter('unpaid',this)">사례 미지급</button>
-        <button class="btn admin-filter" data-filter="paid" onclick="setAdminFilter('paid',this)">지급 완료</button>
-      </div>
+      <div id="adminWordsPanel" class="hidden">
+        <div class="word-manager-head">
+          <div>
+            <h3>어휘 목록 관리</h3>
+            <p class="helper">세 어휘군은 나누어 확인하고, 전체 목록은 CSV 한 파일로 교체합니다.</p>
+          </div>
+          <div class="word-manager-actions">
+            <button class="btn" onclick="downloadWordTemplateCSV()">CSV 양식</button>
+            <button class="btn" onclick="exportEmotionWordsCSV()">현재 목록 내보내기</button>
+            <button class="btn primary" onclick="document.getElementById('wordCsvFile').click()">새 목록 가져오기</button>
+            <input id="wordCsvFile" type="file" accept=".csv,text/csv" class="hidden"
+              onchange="handleWordCsvFile(event)" />
+          </div>
+        </div>
 
-      <div class="admin-list-meta">
-        <span id="adminResultCount">0명 표시</span>
-        <span>사례비 상태는 최종 제출 완료자에게만 적용됩니다.</span>
-      </div>
+        <div class="word-summary-grid">
+          <div class="word-summary"><span>전체</span><strong id="wordTotalCount">0</strong></div>
+          <div class="word-summary"><span>신체감각</span><strong id="wordBodyCount">0</strong></div>
+          <div class="word-summary"><span>맥락기반</span><strong id="wordContextCount">0</strong></div>
+          <div class="word-summary"><span>직접표현</span><strong id="wordDirectCount">0</strong></div>
+        </div>
 
-      <div class="card admin-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>참가번호</th>
-              <th>이름</th>
-              <th>연락처</th>
-              <th>진행률</th>
-              <th>상태</th>
-              <th>최근 활동</th>
-              <th>사례비</th>
-              <th>상세</th>
-            </tr>
-          </thead>
-          <tbody id="participantTable"></tbody>
-        </table>
+        <div class="word-cluster-tabs">
+          <button class="btn word-cluster-tab active" data-cluster="body"
+            onclick="setWordCluster('body',this)">신체감각</button>
+          <button class="btn word-cluster-tab" data-cluster="context"
+            onclick="setWordCluster('context',this)">맥락기반</button>
+          <button class="btn word-cluster-tab" data-cluster="direct"
+            onclick="setWordCluster('direct',this)">직접표현</button>
+        </div>
+
+        <div class="card word-manager-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>순서</th>
+                <th>어휘</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody id="wordManagerTable"></tbody>
+          </table>
+        </div>
+
+        <div id="wordImportBox" class="word-import-box hidden">
+          <h3>CSV 적용 전 확인</h3>
+          <div id="wordImportSummary"></div>
+          <div id="wordImportPreview" class="word-preview"></div>
+          <div class="row" style="margin-top:16px">
+            <button id="applyWordCsvButton" class="btn primary" onclick="applyWordCsv()" disabled>이 목록으로 교체</button>
+            <button class="btn" onclick="cancelWordCsvPreview()">취소</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1454,6 +1664,10 @@ let currentCategory = null;
 let adminParticipants = [];
 let adminFilter = 'all';
 let selectedAdminParticipant = null;
+let adminWordRows = [];
+let activeWordCluster = 'body';
+let pendingWordImport = null;
+
 
 window.addEventListener('online',()=>{
   const el=document.getElementById('connectionState');
@@ -1928,6 +2142,387 @@ async function loginAdmin(){
 async function logoutAdmin(){
   await supabaseClient.auth.signOut();
   showScreen('opening');
+}
+
+
+function showAdminPanel(panel){
+  const participantsPanel=document.getElementById('adminParticipantsPanel');
+  const wordsPanel=document.getElementById('adminWordsPanel');
+  const participantsTab=document.getElementById('adminParticipantsTab');
+  const wordsTab=document.getElementById('adminWordsTab');
+  const title=document.getElementById('adminPageTitle');
+  const description=document.getElementById('adminPageDescription');
+
+  if(panel==='words'){
+    participantsPanel.classList.add('hidden');
+    wordsPanel.classList.remove('hidden');
+    participantsTab.classList.remove('active');
+    wordsTab.classList.add('active');
+    title.textContent='어휘 관리';
+    description.textContent='신체감각·맥락기반·직접표현 어휘를 확인하고 CSV 파일로 전체 목록을 교체합니다.';
+    renderVocabularyManager();
+  }else{
+    wordsPanel.classList.add('hidden');
+    participantsPanel.classList.remove('hidden');
+    wordsTab.classList.remove('active');
+    participantsTab.classList.add('active');
+    title.textContent='참여자 관리';
+    description.textContent='참여 현황을 관리하고, 연락처와 세 어휘군의 응답 데이터를 각각 내려받습니다.';
+    renderAdmin();
+  }
+}
+
+async function renderVocabularyManager(){
+  const table=document.getElementById('wordManagerTable');
+  table.innerHTML='<tr><td colspan="3">어휘 목록을 불러오는 중입니다.</td></tr>';
+
+  const {data,error}=await supabaseClient.rpc('admin_export_emotion_words');
+
+  if(error){
+    console.error(error);
+    table.innerHTML='<tr><td colspan="3">어휘 목록을 불러오지 못했습니다.</td></tr>';
+    return;
+  }
+
+  adminWordRows=Array.isArray(data) ? data : [];
+  updateWordSummary();
+  renderWordClusterTable();
+}
+
+function updateWordSummary(){
+  const activeRows=adminWordRows.filter(row=>row.is_active!==false);
+
+  document.getElementById('wordTotalCount').textContent=activeRows.length;
+  document.getElementById('wordBodyCount').textContent=
+    activeRows.filter(row=>row.cluster_key==='body').length;
+  document.getElementById('wordContextCount').textContent=
+    activeRows.filter(row=>row.cluster_key==='context').length;
+  document.getElementById('wordDirectCount').textContent=
+    activeRows.filter(row=>row.cluster_key==='direct').length;
+}
+
+function setWordCluster(cluster,button){
+  activeWordCluster=cluster;
+
+  document.querySelectorAll('.word-cluster-tab')
+    .forEach(tab=>tab.classList.remove('active'));
+
+  if(button) button.classList.add('active');
+
+  renderWordClusterTable();
+}
+
+function renderWordClusterTable(){
+  const table=document.getElementById('wordManagerTable');
+  const rows=adminWordRows
+    .filter(row=>row.cluster_key===activeWordCluster)
+    .sort((a,b)=>Number(a.sort_order||0)-Number(b.sort_order||0));
+
+  table.innerHTML='';
+
+  if(!rows.length){
+    table.innerHTML='<tr><td colspan="3" class="admin-empty">등록된 어휘가 없습니다.</td></tr>';
+    return;
+  }
+
+  rows.forEach(row=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${Number(row.sort_order || 0)}</td>
+      <td>${escapeHTML(row.word || '')}</td>
+      <td class="${row.is_active===false ? 'word-status-inactive' : 'word-status-active'}">
+        ${row.is_active===false ? '비활성' : '활성'}
+      </td>
+    `;
+    table.appendChild(tr);
+  });
+}
+
+function downloadWordTemplateCSV(){
+  const headers=['cluster_key','word','sort_order','is_active'];
+  const rows=[
+    {cluster_key:'body',word:'예시 신체감각 어휘',sort_order:1,is_active:true},
+    {cluster_key:'context',word:'예시 맥락기반 어휘',sort_order:1,is_active:true},
+    {cluster_key:'direct',word:'예시 직접표현 어휘',sort_order:1,is_active:true}
+  ];
+
+  downloadCSV('emotion_words_template.csv',headers,rows);
+}
+
+async function exportEmotionWordsCSV(){
+  if(!adminWordRows.length){
+    await renderVocabularyManager();
+  }
+
+  const headers=['cluster_key','word','sort_order','is_active'];
+  const rows=adminWordRows
+    .slice()
+    .sort((a,b)=>{
+      const clusterOrder={body:1,context:2,direct:3};
+      return (clusterOrder[a.cluster_key]||9)-(clusterOrder[b.cluster_key]||9)
+        || Number(a.sort_order||0)-Number(b.sort_order||0);
+    })
+    .map(row=>({
+      cluster_key:row.cluster_key,
+      word:row.word,
+      sort_order:row.sort_order,
+      is_active:row.is_active!==false
+    }));
+
+  downloadCSV(
+    `emotion_words_${localDateKey(new Date())}.csv`,
+    headers,
+    rows
+  );
+
+  showAdminToast('현재 어휘 목록을 CSV로 내보냈습니다.');
+}
+
+function parseCsvText(text){
+  const rows=[];
+  let row=[];
+  let value='';
+  let inQuotes=false;
+
+  for(let i=0;i<text.length;i++){
+    const char=text[i];
+    const next=text[i+1];
+
+    if(char==='"'){
+      if(inQuotes && next==='"'){
+        value+='"';
+        i++;
+      }else{
+        inQuotes=!inQuotes;
+      }
+      continue;
+    }
+
+    if(char===',' && !inQuotes){
+      row.push(value);
+      value='';
+      continue;
+    }
+
+    if((char==='\n' || char==='\r') && !inQuotes){
+      if(char==='\r' && next==='\n') i++;
+      row.push(value);
+      value='';
+
+      if(row.some(cell=>String(cell).trim()!=='')){
+        rows.push(row);
+      }
+      row=[];
+      continue;
+    }
+
+    value+=char;
+  }
+
+  row.push(value);
+  if(row.some(cell=>String(cell).trim()!=='')){
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function normalizeBoolean(value){
+  const normalized=String(value ?? '').trim().toLowerCase();
+  if(['true','1','yes','y','활성'].includes(normalized)) return true;
+  if(['false','0','no','n','비활성'].includes(normalized)) return false;
+  if(normalized==='') return true;
+  return null;
+}
+
+async function handleWordCsvFile(event){
+  const file=event.target.files?.[0];
+  if(!file) return;
+
+  const text=(await file.text()).replace(/^\uFEFF/,'');
+  const parsed=parseCsvText(text);
+
+  const summary=document.getElementById('wordImportSummary');
+  const preview=document.getElementById('wordImportPreview');
+  const box=document.getElementById('wordImportBox');
+  const applyButton=document.getElementById('applyWordCsvButton');
+
+  box.classList.remove('hidden');
+  pendingWordImport=null;
+  applyButton.disabled=true;
+
+  if(parsed.length<2){
+    summary.innerHTML='<div class="word-preview-error">CSV에 헤더와 최소 1개의 어휘 행이 필요합니다.</div>';
+    preview.innerHTML='';
+    return;
+  }
+
+  const headers=parsed[0].map(cell=>String(cell).trim().toLowerCase());
+  const required=['cluster_key','word'];
+  const missing=required.filter(header=>!headers.includes(header));
+
+  if(missing.length){
+    summary.innerHTML=`<div class="word-preview-error">필수 열이 없습니다: ${escapeHTML(missing.join(', '))}</div>`;
+    preview.innerHTML='';
+    return;
+  }
+
+  const indexOf=name=>headers.indexOf(name);
+  const errors=[];
+  const duplicateKeys=new Set();
+  const seen=new Set();
+
+  const rows=parsed.slice(1).map((cells,index)=>{
+    const cluster=String(cells[indexOf('cluster_key')] ?? '').trim().toLowerCase();
+    const word=String(cells[indexOf('word')] ?? '').trim();
+
+    const sortIndex=indexOf('sort_order');
+    const activeIndex=indexOf('is_active');
+
+    const rawOrder=sortIndex>=0 ? String(cells[sortIndex] ?? '').trim() : '';
+    const sortOrder=rawOrder==='' ? index+1 : Number(rawOrder);
+
+    const activeValue=activeIndex>=0
+      ? normalizeBoolean(cells[activeIndex])
+      : true;
+
+    if(!['body','context','direct'].includes(cluster)){
+      errors.push(`${index+2}행: cluster_key는 body, context, direct 중 하나여야 합니다.`);
+    }
+
+    if(!word){
+      errors.push(`${index+2}행: word가 비어 있습니다.`);
+    }
+
+    if(!Number.isInteger(sortOrder) || sortOrder<1){
+      errors.push(`${index+2}행: sort_order는 1 이상의 정수여야 합니다.`);
+    }
+
+    if(activeValue===null){
+      errors.push(`${index+2}행: is_active 값은 true/false 형식이어야 합니다.`);
+    }
+
+    const duplicateKey=`${cluster}|||${word}`;
+    if(seen.has(duplicateKey)){
+      duplicateKeys.add(`${cluster} / ${word}`);
+    }
+    seen.add(duplicateKey);
+
+    return {
+      cluster_key:cluster,
+      word,
+      sort_order:sortOrder,
+      is_active:activeValue===null ? true : activeValue
+    };
+  });
+
+  duplicateKeys.forEach(key=>{
+    errors.push(`중복 어휘: ${key}`);
+  });
+
+  const counts={
+    body:rows.filter(row=>row.cluster_key==='body' && row.is_active).length,
+    context:rows.filter(row=>row.cluster_key==='context' && row.is_active).length,
+    direct:rows.filter(row=>row.cluster_key==='direct' && row.is_active).length
+  };
+
+  if(counts.body===0) errors.push('신체감각(body) 활성 어휘가 최소 1개 필요합니다.');
+  if(counts.context===0) errors.push('맥락기반(context) 활성 어휘가 최소 1개 필요합니다.');
+  if(counts.direct===0) errors.push('직접표현(direct) 활성 어휘가 최소 1개 필요합니다.');
+
+  const activeTotal=counts.body+counts.context+counts.direct;
+
+  if(errors.length){
+    summary.innerHTML=`
+      <div class="word-preview-error">
+        <strong>적용할 수 없습니다.</strong><br>
+        ${errors.slice(0,12).map(error=>escapeHTML(error)).join('<br>')}
+        ${errors.length>12 ? `<br>외 ${errors.length-12}개 오류` : ''}
+      </div>
+    `;
+  }else{
+    summary.innerHTML=`
+      <div class="word-preview-ok">
+        CSV 검증 완료 · 활성 어휘 총 ${activeTotal}개<br>
+        신체감각 ${counts.body}개 · 맥락기반 ${counts.context}개 · 직접표현 ${counts.direct}개
+      </div>
+      <div class="word-preview-warning">
+        적용하면 현재 Supabase 어휘 목록 전체가 이 CSV 내용으로 교체됩니다.
+        기존 어휘 목록은 자동 백업됩니다. 진행 중인 참여자가 있다면 기존 응답과 새 목록이 섞일 수 있으므로 연구 시작 전 교체를 권장합니다.
+      </div>
+    `;
+
+    pendingWordImport=rows;
+    applyButton.disabled=false;
+  }
+
+  preview.innerHTML=`
+    <div class="word-preview-list">
+      <table>
+        <thead>
+          <tr><th>구분</th><th>어휘</th><th>순서</th><th>상태</th></tr>
+        </thead>
+        <tbody>
+          ${rows.slice(0,30).map(row=>`
+            <tr>
+              <td>${escapeHTML(row.cluster_key)}</td>
+              <td>${escapeHTML(row.word)}</td>
+              <td>${Number(row.sort_order)}</td>
+              <td>${row.is_active ? '활성' : '비활성'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ${rows.length>30 ? `<p class="helper" style="margin-top:10px">앞의 30개만 미리보기로 표시합니다. 전체 ${rows.length}개 행.</p>` : ''}
+    </div>
+  `;
+}
+
+async function applyWordCsv(){
+  if(!pendingWordImport?.length) return;
+
+  const activeCount=adminParticipants.filter(p=>!p.final_submitted).length;
+  const warning=activeCount>0
+    ? `현재 진행 중인 참여자가 ${activeCount}명 있습니다.\n기존 응답과 새 어휘 목록이 섞일 수 있습니다.\n\n그래도 전체 목록을 교체할까요?`
+    : '현재 어휘 목록 전체를 CSV 내용으로 교체할까요?\n기존 목록은 Supabase에 자동 백업됩니다.';
+
+  if(!confirm(warning)) return;
+
+  const button=document.getElementById('applyWordCsvButton');
+  setBusy(button,true,'적용 중...');
+
+  const {data,error}=await supabaseClient.rpc('admin_replace_emotion_words',{
+    p_rows:pendingWordImport
+  });
+
+  setBusy(button,false);
+
+  if(error){
+    console.error(error);
+    showAdminToast('어휘 목록 교체에 실패했습니다.');
+    return;
+  }
+
+  pendingWordImport=null;
+  document.getElementById('wordCsvFile').value='';
+  document.getElementById('wordImportBox').classList.add('hidden');
+
+  await loadEmotionWordsFromSupabase();
+  await renderVocabularyManager();
+
+  const result=data && typeof data==='object'
+    ? `총 ${data.total ?? ''}개`
+    : '';
+
+  showAdminToast(`새 어휘 목록을 적용했습니다. ${result}`);
+}
+
+function cancelWordCsvPreview(){
+  pendingWordImport=null;
+  document.getElementById('wordCsvFile').value='';
+  document.getElementById('wordImportBox').classList.add('hidden');
+  document.getElementById('wordImportSummary').innerHTML='';
+  document.getElementById('wordImportPreview').innerHTML='';
 }
 
 async function renderAdmin(){
