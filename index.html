@@ -1835,8 +1835,7 @@ async function registerParticipant(){
   const fields = ['name','email','phone','age','gender'];
   const values = Object.fromEntries(fields.map(id=>[id, document.getElementById(id).value.trim()]));
   const ok = fields.every(k=>values[k]) &&
-    ['agreeResearch','agreePrivacy'].every(id=>document.getElementById(id).checked);
-
+  document.getElementById('agreePrivacy').checked;
   if(!ok){
     document.getElementById('consentError').textContent='모든 필수 입력과 동의를 완료해주세요.';
     return;
