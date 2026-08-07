@@ -1878,6 +1878,7 @@
           <div id="emotionMap" class="map"></div>
         </div>
         <div class="row">
+          <button class="btn" onclick="downloadCurrentEmotionMapJPG()">감정 맵 JPG 저장</button>
           <button class="btn" onclick="goDashboard()">응답 수정하기</button>
           <button class="btn primary" onclick="finalSubmit()">최종 제출 완료</button>
         </div>
@@ -2743,6 +2744,201 @@ function renderMap(clusterKey){
     map.appendChild(dot);
   });
 }
+
+function sanitizeFileName(value){
+  return String(value || 'emotion-map')
+    .replace(/[\\/:*?"<>|]/g,'-')
+    .replace(/\s+/g,'_')
+    .slice(0,80);
+}
+
+function drawEmotionMapToCanvas(entries,title,fileName){
+  if(!Array.isArray(entries) || !entries.length){
+    alert('저장할 감정 맵 데이터가 없습니다.');
+    return;
+  }
+
+  const width=1600;
+  const height=1200;
+  const padding=110;
+  const plotX=padding;
+  const plotY=180;
+  const plotW=width-padding*2;
+  const plotH=height-300;
+
+  const canvas=document.createElement('canvas');
+  canvas.width=width;
+  canvas.height=height;
+
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff';
+  ctx.fillRect(0,0,width,height);
+
+  // title
+  ctx.fillStyle='#242424';
+  ctx.font='700 48px Pretendard, Arial, sans-serif';
+  ctx.textAlign='left';
+  ctx.fillText(title || '감정 맵',padding,90);
+
+  // subtitle
+  ctx.fillStyle='#8a8a8a';
+  ctx.font='400 24px Pretendard, Arial, sans-serif';
+  ctx.fillText('Valence × Arousal',padding,130);
+
+  // plot boundary
+  ctx.strokeStyle='#e7e7e7';
+  ctx.lineWidth=2;
+  ctx.strokeRect(plotX,plotY,plotW,plotH);
+
+  // center axes
+  ctx.strokeStyle='#bdbdbd';
+  ctx.lineWidth=2;
+
+  ctx.beginPath();
+  ctx.moveTo(plotX+plotW/2,plotY);
+  ctx.lineTo(plotX+plotW/2,plotY+plotH);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(plotX,plotY+plotH/2);
+  ctx.lineTo(plotX+plotW,plotY+plotH/2);
+  ctx.stroke();
+
+  // axis labels
+  ctx.fillStyle='#8a8a8a';
+  ctx.font='500 22px Pretendard, Arial, sans-serif';
+
+  ctx.textAlign='left';
+  ctx.fillText('불쾌함',plotX,plotY+plotH+42);
+
+  ctx.textAlign='right';
+  ctx.fillText('유쾌함',plotX+plotW,plotY+plotH+42);
+
+  ctx.save();
+  ctx.translate(plotX-46,plotY);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign='right';
+  ctx.fillText('활성',0,0);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(plotX-46,plotY+plotH);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign='left';
+  ctx.fillText('비활성',0,0);
+  ctx.restore();
+
+  // words
+  ctx.fillStyle='#242424';
+  ctx.font='600 22px Pretendard, Arial, sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+
+  entries.forEach(item=>{
+    const valence=Math.max(-1,Math.min(1,Number(item.valence)||0));
+    const arousal=Math.max(-1,Math.min(1,Number(item.arousal)||0));
+
+    const x=plotX+((valence+1)/2)*plotW;
+    const y=plotY+(1-((arousal+1)/2))*plotH;
+
+    // subtle white halo for legibility, no rounded box
+    ctx.lineWidth=7;
+    ctx.strokeStyle='rgba(255,255,255,.92)';
+    ctx.strokeText(String(item.word),x,y);
+
+    ctx.fillStyle='#242424';
+    ctx.fillText(String(item.word),x,y);
+  });
+
+  const link=document.createElement('a');
+  link.download=`${sanitizeFileName(fileName)}.jpg`;
+  link.href=canvas.toDataURL('image/jpeg',0.94);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function downloadCurrentEmotionMapJPG(){
+  if(!currentParticipant){
+    alert('현재 참여자 데이터가 없습니다.');
+    return;
+  }
+
+  const activeButton=document.querySelector('#mapTabs .tab.active');
+  let clusterId=null;
+
+  if(activeButton?.dataset?.clusterId){
+    clusterId=activeButton.dataset.clusterId;
+  }
+
+  // fallback: infer from title
+  if(!clusterId){
+    const title=document.getElementById('mapTitle')?.textContent || '';
+    const cluster=CATEGORIES.find(cat=>title.includes(cat.title));
+    clusterId=cluster?.id || CATEGORIES[0]?.id;
+  }
+
+  const cluster=CATEGORIES.find(cat=>cat.id===clusterId) || CATEGORIES[0];
+  if(!cluster) return;
+
+  const response=currentParticipant.responses?.[cluster.id] || {};
+  const pairedId=cluster.pairId;
+  const paired=currentParticipant.responses?.[pairedId] || {};
+
+  const entries=cluster.words
+    .filter(word=>response[word] !== undefined && paired[word] !== undefined)
+    .map(word=>({
+      word,
+      valence: cluster.dimension==='valence'
+        ? Number(response[word])
+        : Number(paired[word]),
+      arousal: cluster.dimension==='arousal'
+        ? Number(response[word])
+        : Number(paired[word])
+    }));
+
+  const title=document.getElementById('mapTitle')?.textContent || '감정 맵';
+  const no=currentParticipant.participantNo || currentParticipant.participant_number || 'participant';
+
+  drawEmotionMapToCanvas(
+    entries,
+    title,
+    `${no}_${cluster.title || cluster.id}_emotion_map`
+  );
+}
+
+function downloadAdminParticipantMapJPG(){
+  if(!adminParticipantMapData || !selectedAdminParticipant){
+    alert('먼저 참여자의 최종 감정 맵을 불러와주세요.');
+    return;
+  }
+
+  const clusterKey=adminParticipantMapCluster || 'body';
+  const cluster=adminParticipantMapData[clusterKey] || {};
+  const entries=Object.entries(cluster).map(([word,score])=>({
+    word,
+    valence:Number(score.valence ?? 0),
+    arousal:Number(score.arousal ?? 0)
+  }));
+
+  const labels={
+    body:'신체감각 감정 맵',
+    context:'맥락기반 감정 맵',
+    direct:'직접표현 감정 맵'
+  };
+
+  const no=
+    selectedAdminParticipant.participant_number ||
+    selectedAdminParticipant.participant_code ||
+    'participant';
+
+  drawEmotionMapToCanvas(
+    entries,
+    labels[clusterKey] || '감정 맵',
+    `${no}_${labels[clusterKey] || 'emotion_map'}`
+  );
+}
+
 async function finalSubmit(){
   currentParticipant.finalSubmitted=true;
   const saved = await saveParticipant();
@@ -3594,7 +3790,11 @@ function renderParticipantDetail(){
       <div id="adminParticipantMapPanel" class="hidden">
         <div id="adminParticipantMapState" class="admin-map-state"></div>
         <div id="adminParticipantMapTabs" class="admin-map-toolbar"></div>
-        <div id="adminParticipantMapTitle" style="font-weight:800;margin:8px 0 12px"></div>
+        <div class="row" style="justify-content:space-between;align-items:center;margin:8px 0 12px">
+          <div id="adminParticipantMapTitle" style="font-weight:800"></div>
+          <button class="btn" style="min-width:auto;padding:9px 14px;font-size:13px"
+            onclick="downloadAdminParticipantMapJPG()">JPG 저장</button>
+        </div>
         <div id="adminParticipantMap" class="admin-participant-map"></div>
       </div>
     </div>
