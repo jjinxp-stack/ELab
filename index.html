@@ -806,6 +806,60 @@
     .drag-word,
     .survey-progress-fill{transition:none}
   }
+
+
+  /* 관리자 참여자 관리 */
+  .admin-tools{
+    display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+    margin:22px 0 16px;
+  }
+  .admin-search{ flex:1 1 280px; min-width:220px; }
+  .admin-filters{ display:flex; gap:8px; flex-wrap:wrap; }
+  .admin-filter{
+    min-width:auto; padding:10px 15px; font-size:13px;
+    border-color:#d8d8d8;
+  }
+  .admin-filter.active{ background:#242424; color:#fff; border-color:#242424; }
+  .admin-table-wrap{ margin-top:18px; overflow:auto; }
+  .admin-table-wrap table{ min-width:860px; }
+  .reward-btn,.detail-btn{
+    min-width:auto; padding:8px 12px; font-size:12px; white-space:nowrap;
+  }
+  .reward-btn.paid{ background:#242424; color:#fff; border-color:#242424; }
+  .admin-empty{ text-align:center; color:#888; padding:34px 10px; }
+  .admin-modal{
+    position:fixed; inset:0; z-index:100;
+    display:none; place-items:center; padding:24px;
+    background:rgba(0,0,0,.32); backdrop-filter:blur(5px);
+  }
+  .admin-modal.open{ display:grid; }
+  .admin-modal-card{
+    width:min(680px,100%); max-height:88vh; overflow:auto;
+    background:#fff; border-radius:24px; padding:30px;
+    box-shadow:0 24px 80px rgba(0,0,0,.18);
+  }
+  .admin-modal-head{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:18px; margin-bottom:24px;
+  }
+  .admin-modal-head .btn{ min-width:auto; padding:9px 14px; }
+  .admin-detail-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:14px;
+    margin-bottom:22px;
+  }
+  .admin-detail-item{
+    padding:14px 16px; border-radius:14px; background:#f5f5f5;
+  }
+  .admin-detail-item span{ display:block; color:#888; font-size:12px; margin-bottom:5px; }
+  .category-checks{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 22px; }
+  .category-check{ padding:10px 12px; border-radius:12px; background:#f5f5f5; font-size:13px; }
+  .category-check.done{ background:#ece8fb; color:#4e3c91; font-weight:700; }
+  .admin-note{ min-height:110px; resize:vertical; }
+  .admin-detail-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:16px; }
+  @media(max-width:700px){
+    .admin-detail-grid,.category-checks{ grid-template-columns:1fr; }
+    .admin-modal-card{ padding:22px; }
+  }
 </style>
 
 </head>
@@ -1070,27 +1124,55 @@
       <div class="dashboard-head">
         <div>
           <div class="eyebrow">ADMIN</div>
-          <h2>연구 관리자 대시보드</h2>
-          <p>Supabase에 저장된 참여자 현황과 연구 응답을 확인합니다.</p>
+          <h2>참여자 관리</h2>
+          <p>참여 현황, 사례비 지급 상태와 관리자 메모를 관리합니다.</p>
         </div>
         <div class="row">
-          <button class="btn" onclick="exportCSV()">CSV 내보내기</button>
+          <button class="btn" onclick="exportCSV()">응답 CSV</button>
           <button class="btn" onclick="logoutAdmin()">로그아웃</button>
         </div>
       </div>
+
       <div class="metric-grid">
         <div class="card metric"><span class="helper">전체 참가자</span><strong id="mTotal">0</strong></div>
         <div class="card metric"><span class="helper">완료</span><strong id="mDone">0</strong></div>
         <div class="card metric"><span class="helper">진행 중</span><strong id="mActive">0</strong></div>
         <div class="card metric"><span class="helper">사례 미지급</span><strong id="mUnpaid">0</strong></div>
       </div>
-      <div class="card" style="margin-top:18px;overflow:auto">
+
+      <div class="admin-tools">
+        <input id="adminSearch" class="admin-search" placeholder="이름, 연락처, 참가번호, 참여코드 검색" oninput="applyAdminFilters()" />
+        <div class="admin-filters" aria-label="참여자 상태 필터">
+          <button class="btn admin-filter active" data-filter="all" onclick="setAdminFilter('all',this)">전체</button>
+          <button class="btn admin-filter" data-filter="active" onclick="setAdminFilter('active',this)">진행 중</button>
+          <button class="btn admin-filter" data-filter="done" onclick="setAdminFilter('done',this)">완료</button>
+          <button class="btn admin-filter" data-filter="unpaid" onclick="setAdminFilter('unpaid',this)">미지급</button>
+          <button class="btn admin-filter" data-filter="paid" onclick="setAdminFilter('paid',this)">지급 완료</button>
+        </div>
+      </div>
+
+      <div class="card admin-table-wrap">
         <table>
-          <thead><tr><th>참가번호</th><th>이름</th><th>연락처</th><th>진행률</th><th>완료</th><th>사례</th></tr></thead>
+          <thead>
+            <tr><th>참가번호</th><th>이름</th><th>연락처</th><th>진행률</th><th>상태</th><th>사례비</th><th>상세</th></tr>
+          </thead>
           <tbody id="participantTable"></tbody>
         </table>
       </div>
     </section>
+
+    <div id="participantModal" class="admin-modal" onclick="closeParticipantModal(event)">
+      <div class="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="participantModalTitle">
+        <div class="admin-modal-head">
+          <div>
+            <div class="eyebrow">PARTICIPANT</div>
+            <h3 id="participantModalTitle">참여자 상세</h3>
+          </div>
+          <button class="btn" onclick="closeParticipantModal()">닫기</button>
+        </div>
+        <div id="participantDetail"></div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -1118,6 +1200,9 @@ const CATEGORIES = CLUSTERS.flatMap(c => DIMENSIONS.map(d => ({
 
 let currentParticipant = null;
 let currentCategory = null;
+let adminParticipants = [];
+let adminFilter = 'all';
+let selectedAdminParticipant = null;
 
 window.addEventListener('online',()=>{
   const el=document.getElementById('connectionState');
@@ -1596,30 +1681,65 @@ async function logoutAdmin(){
 
 async function renderAdmin(){
   const table = document.getElementById('participantTable');
-  table.innerHTML='<tr><td colspan="6">데이터를 불러오는 중입니다.</td></tr>';
+  table.innerHTML='<tr><td colspan="7">데이터를 불러오는 중입니다.</td></tr>';
 
   const { data, error } = await supabaseClient.rpc('admin_list_emotion_participants');
 
   if(error){
     console.error(error);
-    table.innerHTML='<tr><td colspan="6">관리자 데이터를 불러오지 못했습니다.</td></tr>';
+    table.innerHTML='<tr><td colspan="7">관리자 데이터를 불러오지 못했습니다.</td></tr>';
     return;
   }
 
-  const participants = Array.isArray(data) ? data : [];
-  const completed = participants.filter(p=>p.final_submitted).length;
-  const active = participants.length - completed;
-  const unpaid = participants.filter(p=>p.final_submitted && !p.reward_paid).length;
+  adminParticipants = Array.isArray(data) ? data : [];
+  updateAdminMetrics();
+  applyAdminFilters();
+}
 
-  document.getElementById('mTotal').textContent=participants.length;
+function updateAdminMetrics(){
+  const completed = adminParticipants.filter(p=>p.final_submitted).length;
+  const active = adminParticipants.length - completed;
+  const unpaid = adminParticipants.filter(p=>p.final_submitted && !p.reward_paid).length;
+
+  document.getElementById('mTotal').textContent=adminParticipants.length;
   document.getElementById('mDone').textContent=completed;
   document.getElementById('mActive').textContent=active;
   document.getElementById('mUnpaid').textContent=unpaid;
+}
 
+function setAdminFilter(filter, button){
+  adminFilter=filter;
+  document.querySelectorAll('.admin-filter').forEach(btn=>btn.classList.remove('active'));
+  if(button) button.classList.add('active');
+  applyAdminFilters();
+}
+
+function applyAdminFilters(){
+  const query=(document.getElementById('adminSearch')?.value || '').trim().toLowerCase();
+
+  const filtered=adminParticipants.filter(p=>{
+    const haystack=[p.participant_number,p.participant_code,p.name,p.phone,p.email]
+      .map(v=>String(v || '').toLowerCase()).join(' ');
+    const matchesSearch=!query || haystack.includes(query);
+
+    let matchesFilter=true;
+    if(adminFilter==='active') matchesFilter=!p.final_submitted;
+    if(adminFilter==='done') matchesFilter=Boolean(p.final_submitted);
+    if(adminFilter==='unpaid') matchesFilter=Boolean(p.final_submitted) && !p.reward_paid;
+    if(adminFilter==='paid') matchesFilter=Boolean(p.reward_paid);
+
+    return matchesSearch && matchesFilter;
+  });
+
+  renderParticipantRows(filtered);
+}
+
+function renderParticipantRows(participants){
+  const table=document.getElementById('participantTable');
   table.innerHTML='';
 
   if(!participants.length){
-    table.innerHTML='<tr><td colspan="6">아직 등록된 참여자가 없습니다.</td></tr>';
+    table.innerHTML='<tr><td colspan="7" class="admin-empty">조건에 맞는 참여자가 없습니다.</td></tr>';
     return;
   }
 
@@ -1632,10 +1752,133 @@ async function renderAdmin(){
       <td>${escapeHTML(p.phone || '')}</td>
       <td>${Number(p.completed_count || 0)} / 6</td>
       <td>${p.final_submitted ? '완료' : '진행 중'}</td>
-      <td>${p.reward_paid ? '지급' : '미지급'}</td>
+      <td>
+        <button class="btn reward-btn ${p.reward_paid ? 'paid' : ''}"
+          onclick="toggleRewardPaid('${escapeJS(p.participant_code)}',${!p.reward_paid})">
+          ${p.reward_paid ? '지급 완료' : '미지급'}
+        </button>
+      </td>
+      <td><button class="btn detail-btn" onclick="openParticipantDetail('${escapeJS(p.participant_code)}')">보기</button></td>
     `;
     table.appendChild(tr);
   });
+}
+
+async function toggleRewardPaid(participantCode, nextValue){
+  const { data, error } = await supabaseClient.rpc('admin_update_emotion_participant', {
+    p_participant_code: participantCode,
+    p_reward_paid: nextValue,
+    p_admin_note: null
+  });
+
+  if(error || data !== true){
+    console.error(error);
+    alert('사례비 상태를 저장하지 못했습니다.');
+    return;
+  }
+
+  const participant=adminParticipants.find(p=>p.participant_code===participantCode);
+  if(participant) participant.reward_paid=nextValue;
+  if(selectedAdminParticipant?.participant_code===participantCode){
+    selectedAdminParticipant.reward_paid=nextValue;
+  }
+  updateAdminMetrics();
+  applyAdminFilters();
+  if(selectedAdminParticipant?.participant_code===participantCode) renderParticipantDetail();
+}
+
+function openParticipantDetail(participantCode){
+  selectedAdminParticipant=adminParticipants.find(p=>p.participant_code===participantCode) || null;
+  if(!selectedAdminParticipant) return;
+  renderParticipantDetail();
+  document.getElementById('participantModal').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+function renderParticipantDetail(){
+  const p=selectedAdminParticipant;
+  if(!p) return;
+
+  const completed=Array.isArray(p.completed_categories) ? p.completed_categories : [];
+  const categoryLabels={
+    body_valence:'신체감각 · Valence',
+    body_arousal:'신체감각 · Arousal',
+    context_valence:'맥락기반 · Valence',
+    context_arousal:'맥락기반 · Arousal',
+    direct_valence:'직접표현 · Valence',
+    direct_arousal:'직접표현 · Arousal'
+  };
+  const shortNo=String(p.participant_number || '').replace(/^P-0*/, '') || '-';
+  document.getElementById('participantModalTitle').textContent=`${p.name || '이름 없음'} · ${shortNo}`;
+
+  document.getElementById('participantDetail').innerHTML=`
+    <div class="admin-detail-grid">
+      <div class="admin-detail-item"><span>참가번호</span><strong>${escapeHTML(shortNo)}</strong></div>
+      <div class="admin-detail-item"><span>참여코드</span><strong>${escapeHTML(p.participant_code || '')}</strong></div>
+      <div class="admin-detail-item"><span>이름</span><strong>${escapeHTML(p.name || '')}</strong></div>
+      <div class="admin-detail-item"><span>연락처</span><strong>${escapeHTML(p.phone || '')}</strong></div>
+      <div class="admin-detail-item"><span>이메일</span><strong>${escapeHTML(p.email || '')}</strong></div>
+      <div class="admin-detail-item"><span>성별 / 연령대</span><strong>${escapeHTML(p.gender || '')} / ${escapeHTML(p.age_group || '')}</strong></div>
+      <div class="admin-detail-item"><span>진행률</span><strong>${Number(p.completed_count || 0)} / 6</strong></div>
+      <div class="admin-detail-item"><span>최종 제출</span><strong>${p.final_submitted ? '완료' : '진행 중'}</strong></div>
+    </div>
+
+    <h3>완료한 카테고리</h3>
+    <div class="category-checks">
+      ${Object.entries(categoryLabels).map(([key,label])=>`
+        <div class="category-check ${completed.includes(key) ? 'done' : ''}">
+          ${completed.includes(key) ? '✓' : '○'} ${label}
+        </div>`).join('')}
+    </div>
+
+    <h3>사례비</h3>
+    <button class="btn reward-btn ${p.reward_paid ? 'paid' : ''}"
+      onclick="toggleRewardPaid('${escapeJS(p.participant_code)}',${!p.reward_paid})">
+      ${p.reward_paid ? '지급 완료' : '미지급'}
+    </button>
+
+    <label style="margin-top:22px">관리자 메모
+      <textarea id="adminNoteInput" class="admin-note" placeholder="연락 여부, 특이사항 등을 기록하세요.">${escapeHTML(p.admin_note || '')}</textarea>
+    </label>
+
+    <div class="admin-detail-actions">
+      <button class="btn primary" onclick="saveAdminNote()">메모 저장</button>
+    </div>
+  `;
+}
+
+async function saveAdminNote(){
+  const p=selectedAdminParticipant;
+  if(!p) return;
+  const note=document.getElementById('adminNoteInput').value.trim();
+
+  const { data, error } = await supabaseClient.rpc('admin_update_emotion_participant', {
+    p_participant_code: p.participant_code,
+    p_reward_paid: null,
+    p_admin_note: note
+  });
+
+  if(error || data !== true){
+    console.error(error);
+    alert('메모를 저장하지 못했습니다.');
+    return;
+  }
+
+  p.admin_note=note;
+  const original=adminParticipants.find(x=>x.participant_code===p.participant_code);
+  if(original) original.admin_note=note;
+  alert('메모가 저장되었습니다.');
+}
+
+function closeParticipantModal(event){
+  if(event && event.target.id!=='participantModal') return;
+  document.getElementById('participantModal').classList.remove('open');
+  document.body.style.overflow='';
+  selectedAdminParticipant=null;
+}
+
+function escapeJS(value){
+  return String(value || '').replaceAll('\\','\\\\').replaceAll("'","\\'");
 }
 
 function escapeHTML(value){
