@@ -1100,10 +1100,6 @@
             <input id="agreePrivacy" type="checkbox" />
             <label for="agreePrivacy">[필수] 이름, 이메일, 연락처, 연령대, 성별 및 연구 응답 데이터의 수집·이용에 동의합니다.</label>
           </div>
-          <div class="consent">
-            <input id="agreeReward" type="checkbox" />
-            <label for="agreeReward">[필수] 사례 지급을 위해 연락처 정보가 사용되는 것에 동의합니다.</label>
-          </div>
         </div>
 
         <div class="row">
@@ -1145,7 +1141,7 @@
       <div class="dashboard-head">
         <div>
           <div class="eyebrow">감정 어휘 탐색</div>
-          <h2 id="welcomeTitle">당신의 <strong>감정 지도</strong>strong>를 만들어보세요.</h2>
+          <h2 id="welcomeTitle">당신의 <strong>감정 지도</strong>를 만들어보세요.</h2>
           <p>완료한 카테고리는 다시 수정할 수 있습니다. 모든 변경은 자동 저장됩니다.</p>
         </div>
         <button class="btn" onclick="saveAndExit()">저장하고 나가기</button>
@@ -1230,7 +1226,7 @@
         <div>
           <div class="eyebrow">모든 평가 완료</div>
           <h2>정말, 정말 고생 많으셨습니다.</h2>
-          <p class="lead">수많은 감정들을 끝까지 들여다봐주셨습니다. 아래는 <strong>당신만의 감정 지도</strong>strong>입니다.</p>
+          <p class="lead">수많은 감정들을 끝까지 들여다봐주셨습니다. 아래는 <strong>당신만의 감정 지도</strong>입니다.</p>
         </div>
         <div class="tabs" id="mapTabs"></div>
         <div class="card">
@@ -1280,11 +1276,13 @@
         <div>
           <div class="eyebrow">ADMIN</div>
           <h2>참여자 관리</h2>
-          <p>참여 현황, 사례비 지급 상태와 관리자 메모를 관리합니다.</p>
+          <p>참여 현황을 관리하고, 연락처와 세 어휘군의 응답 데이터를 각각 내려받습니다.</p>
         </div>
         <div class="row">
-          <button class="btn" onclick="exportParticipantCSV()">참여자 CSV</button>
-          <button class="btn" onclick="exportResponseCSV()">응답 CSV</button>
+          <button class="btn" onclick="exportParticipantContactsCSV()">참여자 연락처 CSV</button>
+          <button class="btn" onclick="exportClusterResponseCSV('body')">신체감각 CSV</button>
+          <button class="btn" onclick="exportClusterResponseCSV('context')">맥락기반 CSV</button>
+          <button class="btn" onclick="exportClusterResponseCSV('direct')">직접표현 CSV</button>
           <button class="btn" onclick="logoutAdmin()">로그아웃</button>
         </div>
       </div>
@@ -1457,7 +1455,7 @@ async function registerParticipant(){
   const fields = ['name','email','phone','age','gender'];
   const values = Object.fromEntries(fields.map(id=>[id, document.getElementById(id).value.trim()]));
   const ok = fields.every(k=>values[k]) &&
-    ['agreeResearch','agreePrivacy','agreeReward'].every(id=>document.getElementById(id).checked);
+    ['agreeResearch','agreePrivacy'].every(id=>document.getElementById(id).checked);
 
   if(!ok){
     document.getElementById('consentError').textContent='모든 필수 입력과 동의를 완료해주세요.';
@@ -2259,71 +2257,102 @@ function downloadCSV(filename,headers,rows){
   URL.revokeObjectURL(link.href);
 }
 
-function exportParticipantCSV(){
-  const headers=[
-    'participant_number',
-    'participant_code',
-    'name',
-    'email',
-    'phone',
-    'gender',
-    'age_group',
-    'completed_count',
-    'completed_categories',
-    'final_submitted',
-    'reward_paid',
-    'reward_paid_at',
-    'admin_note',
-    'created_at',
-    'updated_at'
-  ];
+function exportParticipantContactsCSV(){
+  const headers=['name','phone','email'];
 
-  const rows=adminParticipants.map(p=>({
-    ...p,
-    completed_categories:JSON.stringify(p.completed_categories || [])
+  const rows=adminParticipants.map(participant=>({
+    name:participant.name || '',
+    phone:participant.phone || '',
+    email:participant.email || ''
   }));
 
   downloadCSV(
-    `emotion_map_participants_${localDateKey(new Date())}.csv`,
+    `emotion_map_participant_contacts_${localDateKey(new Date())}.csv`,
     headers,
     rows
   );
+
+  showAdminToast('참여자 연락처 CSV를 다운로드했습니다.');
 }
 
-async function exportResponseCSV(){
+async function exportClusterResponseCSV(clusterKey){
+  const clusterNames={
+    body:'신체감각',
+    context:'맥락기반',
+    direct:'직접표현'
+  };
+
+  const fileNames={
+    body:'body',
+    context:'context',
+    direct:'direct'
+  };
+
+  if(!clusterNames[clusterKey]){
+    showAdminToast('알 수 없는 응답 구분입니다.');
+    return;
+  }
+
   const { data,error }=await supabaseClient.rpc('admin_export_emotion_responses');
 
   if(error){
     console.error(error);
-    showAdminToast('응답 CSV 데이터를 불러오지 못했습니다.');
+    showAdminToast('응답 데이터를 불러오지 못했습니다.');
     return;
   }
 
-  const rows=Array.isArray(data) ? data : [];
+  const sourceRows=Array.isArray(data) ? data : [];
+  const pairedRows=new Map();
+
+  sourceRows.forEach(row=>{
+    const category=String(row.category || '');
+    const [cluster,dimension]=category.split('_');
+
+    if(cluster!==clusterKey) return;
+    if(dimension!=='valence' && dimension!=='arousal') return;
+    if(!row.word) return;
+
+    const key=[
+      row.participant_number || '',
+      row.word
+    ].join('|||');
+
+    if(!pairedRows.has(key)){
+      pairedRows.set(key,{
+        participant_number:shortParticipantNumber(row.participant_number),
+        word:row.word,
+        valence:'',
+        arousal:''
+      });
+    }
+
+    pairedRows.get(key)[dimension]=row.score ?? '';
+  });
+
+  const rows=Array.from(pairedRows.values()).sort((a,b)=>{
+    const participantDifference=
+      participantNumberValue(a.participant_number)-
+      participantNumberValue(b.participant_number);
+
+    if(participantDifference!==0) return participantDifference;
+
+    return String(a.word).localeCompare(String(b.word),'ko');
+  });
+
   const headers=[
     'participant_number',
-    'participant_code',
-    'name',
-    'email',
-    'phone',
-    'gender',
-    'age_group',
-    'category',
     'word',
-    'score',
-    'position_y',
-    'final_submitted',
-    'reward_paid',
-    'reward_paid_at',
-    'admin_note',
-    'updated_at'
+    'valence',
+    'arousal'
   ];
 
   downloadCSV(
-    `emotion_map_responses_${localDateKey(new Date())}.csv`,
+    `emotion_map_${fileNames[clusterKey]}_responses_${localDateKey(new Date())}.csv`,
     headers,
     rows
   );
+
+  showAdminToast(`${clusterNames[clusterKey]} 응답 CSV를 다운로드했습니다.`);
 }
 
 document.addEventListener('keydown',event=>{
