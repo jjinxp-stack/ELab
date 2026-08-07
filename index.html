@@ -1427,6 +1427,51 @@
   }
 </style>
 
+
+<style id="admin-developer-tools">
+  .dev-grid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:14px;
+    margin-top:18px;
+  }
+  .dev-card{
+    padding:22px;
+    border-radius:20px;
+    background:#f5f5f5;
+  }
+  .dev-card h3{
+    margin-bottom:8px;
+  }
+  .dev-card p{
+    color:#888;
+    font-size:13px;
+    margin-bottom:16px;
+  }
+  .dev-actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .dev-actions .btn{
+    min-width:auto;
+    padding:10px 14px;
+    font-size:13px;
+  }
+  .dev-warning{
+    margin-top:18px;
+    padding:15px 17px;
+    border-radius:14px;
+    background:#fff4d8;
+    color:#715c1f;
+    font-size:13px;
+    line-height:1.6;
+  }
+  @media(max-width:980px){
+    .dev-grid{grid-template-columns:1fr}
+  }
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -1832,6 +1877,8 @@
           onclick="showAdminPanel('participants')">참여자 관리</button>
         <button id="adminWordsTab" class="btn admin-main-tab"
           onclick="showAdminPanel('words')">어휘 관리</button>
+        <button id="adminDeveloperTab" class="btn admin-main-tab"
+          onclick="showAdminPanel('developer')">개발자 도구</button>
       </div>
 
       <div id="adminParticipantsPanel">
@@ -1950,6 +1997,55 @@
             <button id="applyWordCsvButton" class="btn primary" onclick="applyWordCsv()" disabled>이 목록으로 교체</button>
             <button class="btn" onclick="cancelWordCsvPreview()">취소</button>
           </div>
+        </div>
+      </div>
+
+      <div id="adminDeveloperPanel" class="hidden">
+        <div>
+          <h3>개발자 도구</h3>
+          <p class="helper">
+            실제 참여자 데이터를 건드리지 않고 각 화면과 결과 상태를 빠르게 확인합니다.
+          </p>
+        </div>
+
+        <div class="dev-grid">
+          <div class="dev-card">
+            <h3>화면 미리보기</h3>
+            <p>연구 흐름의 주요 화면으로 바로 이동합니다.</p>
+            <div class="dev-actions">
+              <button class="btn" onclick="devPreviewScreen('opening')">첫 화면</button>
+              <button class="btn" onclick="devPreviewScreen('introPurpose')">인트로 1</button>
+              <button class="btn" onclick="devPreviewScreen('introDimensions')">인트로 2</button>
+              <button class="btn" onclick="devPreviewScreen('introDemo')">인트로 3</button>
+              <button class="btn" onclick="devPreviewScreen('consent')">개인정보 동의</button>
+              <button class="btn" onclick="devPreviewRegistered()">참여코드 화면</button>
+            </div>
+          </div>
+
+          <div class="dev-card">
+            <h3>조사 화면 테스트</h3>
+            <p>가상의 참여자로 실제 조사 UI를 확인합니다. Supabase에는 저장하지 않습니다.</p>
+            <div class="dev-actions">
+              <button class="btn" onclick="devPreviewDashboard()">대시보드</button>
+              <button class="btn" onclick="devPreviewSurvey()">평가 화면</button>
+              <button class="btn" onclick="devPreviewCompletedDashboard()">전체 완료 상태</button>
+            </div>
+          </div>
+
+          <div class="dev-card">
+            <h3>결과 미리보기</h3>
+            <p>더미 Valence·Arousal 값을 생성해 실제 감정 맵과 제출 완료 화면을 확인합니다.</p>
+            <div class="dev-actions">
+              <button class="btn primary" onclick="devPreviewResult()">감정 맵 결과</button>
+              <button class="btn" onclick="devPreviewFinal()">최종 제출 화면</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="dev-warning">
+          개발자 미리보기에서 생성한 응답은 브라우저 메모리에만 존재하며
+          참여자·응답 데이터베이스에는 저장되지 않습니다.
+          상단의 <strong>관리자</strong> 버튼을 누르면 개발자 미리보기 상태를 종료하고 관리자 화면으로 돌아옵니다.
         </div>
       </div>
     </section>
@@ -2157,6 +2253,9 @@ let adminWordRows = [];
 let activeWordCluster = 'body';
 let pendingWordImport = null;
 
+let developerPreviewActive = false;
+let developerPreviewBackup = null;
+
 
 window.addEventListener('online',()=>{
   const el=document.getElementById('connectionState');
@@ -2345,6 +2444,11 @@ async function resumeParticipant(){
 }
 
 async function saveParticipant(){
+  if(developerPreviewActive){
+    if(currentParticipant) currentParticipant.updatedAt = new Date().toISOString();
+    return true;
+  }
+
   if(!currentParticipant?.participantCode) return false;
 
   const { data, error } = await supabaseClient.rpc('save_emotion_participant_state', {
@@ -2489,6 +2593,12 @@ function storeDraggedWord(word,val,y,commit){
   updateSurveyCount();
 
   if(commit){
+    if(developerPreviewActive){
+      currentParticipant.updatedAt = new Date().toISOString();
+      document.getElementById('surveySaveState').textContent='미리보기 · 저장 안 함';
+      return;
+    }
+
     document.getElementById('surveySaveState').textContent='저장 중...';
     supabaseClient.rpc('upsert_emotion_response', {
       p_participant_code: currentParticipant.participantCode,
@@ -2587,6 +2697,8 @@ async function finalSubmit(){
   showScreen('final');
 }
 async function showAdmin(){
+  restoreDeveloperPreviewState();
+
   // 관리자 인증은 어휘 목록 로딩 상태와 독립적으로 동작합니다.
   const notice=document.getElementById('wordLoadNotice');
   if(notice) notice.classList.add('hidden');
@@ -2698,29 +2810,169 @@ async function logoutAdmin(){
 function showAdminPanel(panel){
   const participantsPanel=document.getElementById('adminParticipantsPanel');
   const wordsPanel=document.getElementById('adminWordsPanel');
+  const developerPanel=document.getElementById('adminDeveloperPanel');
+
   const participantsTab=document.getElementById('adminParticipantsTab');
   const wordsTab=document.getElementById('adminWordsTab');
+  const developerTab=document.getElementById('adminDeveloperTab');
+
   const title=document.getElementById('adminPageTitle');
   const description=document.getElementById('adminPageDescription');
 
+  [participantsPanel,wordsPanel,developerPanel].forEach(el=>el?.classList.add('hidden'));
+  [participantsTab,wordsTab,developerTab].forEach(el=>el?.classList.remove('active'));
+
+  if(panel==='developer'){
+    developerPanel.classList.remove('hidden');
+    developerTab.classList.add('active');
+    title.textContent='개발자 도구';
+    description.textContent='실제 연구 데이터를 저장하지 않고 각 화면과 완료 상태를 미리 확인합니다.';
+    return;
+  }
+
   if(panel==='words'){
-    participantsPanel.classList.add('hidden');
     wordsPanel.classList.remove('hidden');
-    participantsTab.classList.remove('active');
     wordsTab.classList.add('active');
     title.textContent='어휘 관리';
     description.textContent='신체감각·맥락기반·직접표현 어휘를 확인하고 CSV 파일로 전체 목록을 교체합니다.';
     renderVocabularyManager();
-  }else{
-    wordsPanel.classList.add('hidden');
-    participantsPanel.classList.remove('hidden');
-    wordsTab.classList.remove('active');
-    participantsTab.classList.add('active');
-    title.textContent='참여자 관리';
-    description.textContent='참여 현황을 관리하고, 연락처와 세 어휘군의 응답 데이터를 각각 내려받습니다.';
-    renderAdmin();
+    return;
   }
+
+  participantsPanel.classList.remove('hidden');
+  participantsTab.classList.add('active');
+  title.textContent='참여자 관리';
+  description.textContent='참여 현황을 관리하고, 연락처와 세 어휘군의 응답 데이터를 각각 내려받습니다.';
+  renderAdmin();
 }
+
+function beginDeveloperPreview(){
+  if(!developerPreviewActive){
+    developerPreviewBackup={
+      participant:currentParticipant,
+      category:currentCategory
+    };
+  }
+  developerPreviewActive=true;
+}
+
+function restoreDeveloperPreviewState(){
+  if(!developerPreviewActive) return;
+
+  currentParticipant=developerPreviewBackup?.participant ?? null;
+  currentCategory=developerPreviewBackup?.category ?? null;
+  developerPreviewBackup=null;
+  developerPreviewActive=false;
+}
+
+function createDeveloperParticipant({complete=false,withResponses=false}={}){
+  beginDeveloperPreview();
+
+  const responses={};
+  const positions={};
+
+  CATEGORIES.forEach((cat,catIndex)=>{
+    responses[cat.id]={};
+    positions[cat.id]={};
+
+    if(withResponses){
+      cat.words.forEach((word,wordIndex)=>{
+        const seed=(wordIndex*37 + catIndex*19) % 101;
+        const score=(seed/50)-1;
+        responses[cat.id][word]=Number(score.toFixed(4));
+        positions[cat.id][word]=145 + ((wordIndex*29 + catIndex*17) % 115);
+      });
+    }
+  });
+
+  currentParticipant={
+    participantNo:'DEV-001',
+    participantCode:'DEV001',
+    name:'개발 미리보기',
+    tutorialDone:true,
+    finalSubmitted:false,
+    responses,
+    positions,
+    completed:complete ? CATEGORIES.map(cat=>cat.id) : [],
+    updatedAt:new Date().toISOString()
+  };
+
+  return currentParticipant;
+}
+
+async function ensureDeveloperWords(){
+  const ready=await ensureEmotionWordsReady();
+  if(!ready){
+    alert('어휘 목록을 불러와야 개발자 미리보기를 사용할 수 있습니다.');
+    return false;
+  }
+  return true;
+}
+
+function devPreviewScreen(screenId){
+  beginDeveloperPreview();
+  showScreen(screenId);
+}
+
+async function devPreviewRegistered(){
+  if(!await ensureDeveloperWords()) return;
+  createDeveloperParticipant();
+
+  document.getElementById('participantNo').textContent='DEV';
+  document.getElementById('participantCode').textContent='DEV001';
+  showScreen('registered');
+}
+
+async function devPreviewDashboard(){
+  if(!await ensureDeveloperWords()) return;
+  createDeveloperParticipant();
+  renderDashboard();
+  showScreen('participantDashboard');
+}
+
+async function devPreviewSurvey(){
+  if(!await ensureDeveloperWords()) return;
+
+  createDeveloperParticipant({withResponses:false});
+  currentCategory=CATEGORIES[0];
+
+  // 일부 카드만 미리 배치해서 실제 진행 중 화면처럼 보이게 합니다.
+  const sampleCount=Math.min(5,currentCategory.words.length);
+  for(let i=0;i<sampleCount;i++){
+    const word=currentCategory.words[i];
+    currentParticipant.responses[currentCategory.id][word]=Number((-0.75 + i*0.3).toFixed(4));
+    currentParticipant.positions[currentCategory.id][word]=150 + i*22;
+  }
+
+  renderSurvey();
+  document.getElementById('surveySaveState').textContent='미리보기 · 저장 안 함';
+  showScreen('survey');
+}
+
+async function devPreviewCompletedDashboard(){
+  if(!await ensureDeveloperWords()) return;
+  createDeveloperParticipant({complete:true,withResponses:true});
+  renderDashboard();
+  showScreen('participantDashboard');
+}
+
+async function devPreviewResult(){
+  if(!await ensureDeveloperWords()) return;
+  createDeveloperParticipant({complete:true,withResponses:true});
+  showCompletion();
+}
+
+async function devPreviewFinal(){
+  if(!await ensureDeveloperWords()) return;
+  createDeveloperParticipant({complete:true,withResponses:true});
+  currentParticipant.finalSubmitted=true;
+
+  document.getElementById('finalCodeBox').innerHTML=
+    '참가번호: <strong>DEV</strong><br>참여코드: <strong>DEV001</strong>';
+
+  showScreen('final');
+}
+
 
 async function renderVocabularyManager(){
   const table=document.getElementById('wordManagerTable');
