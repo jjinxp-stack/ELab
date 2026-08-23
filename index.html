@@ -1738,7 +1738,7 @@
 
         <div class="card">
           <h3>연구 참여 동의서</h3>
-          <p>본 연구는 감정 관련 어휘가 어느 정도의 유쾌함·불쾌함과 활성·비활성 상태로 인식되는지 알아보기 위한 연구입니다.<br>모든 평가는 참여자의 주관적 판단을 기준으로 하며 정답은 없습니다.<br>평가 결과는 연구 데이터로 수집되며, 연구 과정에 사용됩니다.</p>
+          <p>본 연구는 감정 관련 어휘가 어느 정도의 유쾌함·불쾌함과 강함·약함으로 인식되는지 알아보기 위한 연구입니다.<br>모든 평가는 참여자의 주관적 판단을 기준으로 하며 정답은 없습니다.<br>평가 결과는 연구 데이터로 수집되며, 연구 과정에 사용됩니다.</p>
           <div class="consent">
             <input id="agreeStudy" type="checkbox" />
             <label for="agreeStudy">본 연구의 목적과 내용을 이해하였으며, 연구 참여에 자발적으로 동의합니다.</label>
@@ -2151,7 +2151,7 @@ const CLUSTER_DEFINITIONS = [
 
 const DIMENSIONS = [
   {key:'valence', name:'Valence', left:'매우 불쾌함', right:'매우 유쾌함', desc:'이 표현이 당신에게 얼마나 불쾌하거나 유쾌하게 느껴지는지 표시해주세요.'},
-  {key:'arousal', name:'Arousal', left:'매우 가라앉음', right:'매우 활성됨', desc:'이 표현이 당신에게 얼마나 가라앉거나 활성된 상태로 느껴지는지 표시해주세요.'}
+  {key:'arousal', name:'Arousal', left:'매우 약함', right:'매우 강함', desc:'이 표현이 당신에게 얼마나 약하거나 강한 느낌인지 표시해주세요.'}
 ];
 
 let CLUSTERS = CLUSTER_DEFINITIONS.map(cluster => ({
@@ -2831,14 +2831,14 @@ function drawEmotionMapToCanvas(entries,title,fileName){
   ctx.translate(plotX-46,plotY);
   ctx.rotate(-Math.PI/2);
   ctx.textAlign='right';
-  ctx.fillText('활성',0,0);
+  ctx.fillText('강함',0,0);
   ctx.restore();
 
   ctx.save();
   ctx.translate(plotX-46,plotY+plotH);
   ctx.rotate(-Math.PI/2);
   ctx.textAlign='left';
-  ctx.fillText('비활성',0,0);
+  ctx.fillText('약함',0,0);
   ctx.restore();
 
   // words
