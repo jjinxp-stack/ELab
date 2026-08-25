@@ -2741,6 +2741,7 @@ function renderMapTabs(){
   CLUSTERS.forEach((c,i)=>{
     const b=document.createElement('button'); b.className='btn tab '+(i===0?'active':'');
     b.textContent=c.name;
+    b.dataset.clusterKey=c.key;
     b.onclick=()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); b.classList.add('active'); renderMap(c.key); };
     tabs.appendChild(b);
   });
@@ -2879,45 +2880,33 @@ function downloadCurrentEmotionMapJPG(){
   }
 
   const activeButton=document.querySelector('#mapTabs .tab.active');
-  let clusterId=null;
+  const title=document.getElementById('mapTitle')?.textContent || '';
+  const clusterKey=
+    activeButton?.dataset?.clusterKey ||
+    CLUSTERS.find(item=>title.includes(item.name))?.key ||
+    CLUSTERS[0]?.key;
 
-  if(activeButton?.dataset?.clusterId){
-    clusterId=activeButton.dataset.clusterId;
-  }
-
-  // fallback: infer from title
-  if(!clusterId){
-    const title=document.getElementById('mapTitle')?.textContent || '';
-    const cluster=CATEGORIES.find(cat=>title.includes(cat.title));
-    clusterId=cluster?.id || CATEGORIES[0]?.id;
-  }
-
-  const cluster=CATEGORIES.find(cat=>cat.id===clusterId) || CATEGORIES[0];
+  const cluster=CLUSTERS.find(item=>item.key===clusterKey);
   if(!cluster) return;
 
-  const response=currentParticipant.responses?.[cluster.id] || {};
-  const pairedId=cluster.pairId;
-  const paired=currentParticipant.responses?.[pairedId] || {};
+  const valence=currentParticipant.responses?.[`${clusterKey}_valence`] || {};
+  const arousal=currentParticipant.responses?.[`${clusterKey}_arousal`] || {};
 
   const entries=cluster.words
-    .filter(word=>response[word] !== undefined && paired[word] !== undefined)
+    .filter(word=>valence[word] !== undefined && arousal[word] !== undefined)
     .map(word=>({
       word,
-      valence: cluster.dimension==='valence'
-        ? Number(response[word])
-        : Number(paired[word]),
-      arousal: cluster.dimension==='arousal'
-        ? Number(response[word])
-        : Number(paired[word])
+      valence:Number(valence[word]),
+      arousal:Number(arousal[word])
     }));
 
-  const title=document.getElementById('mapTitle')?.textContent || '감정 맵';
+  const mapTitle=title || `${cluster.name} 감정 맵`;
   const no=currentParticipant.participantNo || currentParticipant.participant_number || 'participant';
 
   drawEmotionMapToCanvas(
     entries,
-    title,
-    `${no}_${cluster.title || cluster.id}_emotion_map`
+    mapTitle,
+    `${no}_${cluster.name}_emotion_map`
   );
 }
 
